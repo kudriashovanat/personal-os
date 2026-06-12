@@ -21,9 +21,31 @@ function LoginContent() {
   }, [searchParams]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function checkSession() {
+      try {
+        const res = await fetch("/api/auth/session", { cache: "no-store" });
+        const data = await res.json();
+
+        if (!cancelled && data?.user?.email) {
+          router.replace(callbackUrl || "/");
+        }
+      } catch {
+        // остаёмся на странице входа
+      }
+    }
+
     if (status === "authenticated") {
       router.replace(callbackUrl || "/");
+      return;
     }
+
+    checkSession();
+
+    return () => {
+      cancelled = true;
+    };
   }, [status, callbackUrl, router]);
 
   if (status === "loading" || status === "authenticated") {
