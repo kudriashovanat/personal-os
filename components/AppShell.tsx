@@ -3,7 +3,7 @@
 import { SessionProvider, useSession, signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Sun, CheckSquare, LayoutGrid, CalendarDays, Briefcase, TrendingUp, PenLine,
   Brain, Share2, HeartHandshake, Target, Users, Bot, FolderUp, LogOut, Menu, X, Feather,
@@ -30,10 +30,30 @@ const NAV = [
 
 function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Гард доступа на клиенте: работает через /api/auth/session (Node-runtime),
+  // не зависит от Edge middleware. Данные дополнительно защищены проверкой
+  // сессии в каждом API-маршруте, а allowlist — при создании сессии (lib/auth.ts).
+  useEffect(() => {
+    if (status === "unauthenticated" && pathname !== "/login") {
+      window.location.replace("/login?callbackUrl=" + encodeURIComponent(pathname || "/"));
+    }
+  }, [status, pathname]);
+
   if (pathname === "/login") return <>{children}</>;
+
+  if (status !== "authenticated") {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="flex items-center gap-2.5 text-soft">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-iris" />
+          <span className="text-sm">Открываю Personal OS…</span>
+        </div>
+      </div>
+    );
+  }
 
   const nav = (
     <nav className="flex flex-col gap-0.5">

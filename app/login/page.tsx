@@ -1,13 +1,20 @@
 "use client";
 
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Feather } from "lucide-react";
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 
 function LoginInner() {
   const params = useSearchParams();
   const error = params.get("error");
+  const callbackUrl = params.get("callbackUrl") || "/";
+  const { status } = useSession();
+
+  // Обратный гард: уже авторизованного уводим в приложение
+  useEffect(() => {
+    if (status === "authenticated") window.location.replace(callbackUrl);
+  }, [status, callbackUrl]);
 
   return (
     <div className="flex min-h-dvh items-center justify-center p-6">
@@ -27,7 +34,7 @@ function LoginInner() {
           </div>
         )}
         <button
-          onClick={() => signIn("google", { callbackUrl: "/" })}
+          onClick={() => signIn("google", { callbackUrl })}
           className="mt-6 inline-flex w-full items-center justify-center gap-2.5 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-black"
         >
           <svg width="17" height="17" viewBox="0 0 24 24">
