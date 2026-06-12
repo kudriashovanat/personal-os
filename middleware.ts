@@ -1,64 +1,71 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-// Явный middleware вместо заводского next-auth/middleware.
-// Причина: на Vercel session-cookie за HTTPS называется "__Secure-next-auth.session-token",
-// а заводской middleware определяет имя куки эвристикой по NEXTAUTH_URL и в production
-// может искать обычную "next-auth.session-token" — тогда /api/auth/session сессию видит,
-// а middleware нет, и авторизованного пользователя редиректит на /login.
-// Здесь мы явно пробуем ОБА имени куки и сами проверяем allowlist.
+// MW_VERSION служит маркером деплоя: если в ответе 307 нет заголовка x-mw,
+// значит на Vercel всё ещё работает старая версия middleware.
+const MW_VERSION = "3";
 
 async function readToken(req: NextRequest) {
   const secret = process.env.NEXTAUTH_SECRET;
-  // 1) секьюрная кука (Vercel / любой HTTPS)
-  const secure = await getToken({
-    req,
-    secret,
-    secureCookie: true,
-    cookieName: "__Secure-next-auth.session-token",
-  });
+  // 1) дефолты библиотеки: на Vercel secureCookie = NEXTAUTH_URL.startsWith("https") ?? !!VERCEL
+  const auto = await getToken({ req, secret });
+  if (auto) return auto;
+  // 2) явное секьюрное имя (HTTPS)
+  const secure = await getToken({ req, secret, secureCookie: true, cookieName: "__Secure-next-auth.session-token" });
   if (secure) return secure;
-  // 2) обычная кука (localhost / http)
-  return getToken({
-    req,
-    secret,
-    secureCookie: false,
-    cookieName: "next-auth.session-token",
-  });
+  // 3) явное обычное имя (localhost / http)
+  return getToken({ req, secret, secureCookie: false, cookieName: "next-auth.session-token" });
 }
 
-function isAllowed(email?: string | null): boolean {
-  if (!email) return false;
-  const allowed = (process.env.ALLOWED_EMAILS ?? "")
+function parseAllowed(): string[] {
+  return (process.env.ALLOWED_EMAILS ?? "")
     .split(",")
-    .map((e) => e.trim().toLowerCase())
+    .map((e) => e.trim().replace(/^["']|["']$/g, "").toLowerCase()) // срезаем случайные кавычки
     .filter(Boolean);
-  if (allowed.length === 0) return false; // закрыто по умолчанию
-  return allowed.includes(email.toLowerCase());
 }
 
 export async function middleware(req: NextRequest) {
   const token = await readToken(req);
+  const allowed = parseAllowed();
+  const email = token?.email?.toLowerCase() ?? null;
 
-  if (token && isAllowed(token.email)) {
-    return NextResponse.next();
+  if (token && email && allowed.includes(email)) {
+    const res = NextResponse.next();
+    res.headers.set("x-mw", MW_VERSION);
+    return res;
   }
 
-  // Для API-маршрутов отдаём 401 JSON, а не HTML-редирект
+  // Диагностика причины — попадает в заголовок ответа и в логи Vercel
+  const sessionCookies = req.cookies
+    .getAll()
+    .map((c) => c.name)
+    .filter((n) => n.includes("next-auth"));
+  const reason = !token
+    ? `no-token; secret=${process.env.NEXTAUTH_SECRET ? "set" : "MISSING"}; cookies=[${sessionCookies.join(",")}]`
+    : !email
+      ? "token-without-email"
+      : allowed.length === 0
+        ? "ALLOWED_EMAILS-empty-or-missing"
+        : `email-not-in-list (${email} vs ${allowed.length} allowed)`;
+  console.log(`[middleware v${MW_VERSION}] ${req.nextUrl.pathname} -> redirect: ${reason}`);
+
+  // Для API — 401 JSON, не HTML-редирект
   if (req.nextUrl.pathname.startsWith("/api/")) {
-    return NextResponse.json({ error: "Нет доступа" }, { status: 401 });
+    const res = NextResponse.json({ error: "Нет доступа" }, { status: 401 });
+    res.headers.set("x-mw", MW_VERSION);
+    res.headers.set("x-auth-reason", reason);
+    return res;
   }
 
   const url = req.nextUrl.clone();
   url.pathname = "/login";
-  url.search = token
-    ? "error=AccessDenied" // вошёл в Google, но email не в ALLOWED_EMAILS
-    : `callbackUrl=${encodeURIComponent(req.nextUrl.pathname + req.nextUrl.search)}`;
-  return NextResponse.redirect(url);
+  url.search = token ? "error=AccessDenied" : `callbackUrl=${encodeURIComponent(req.nextUrl.pathname + req.nextUrl.search)}`;
+  const res = NextResponse.redirect(url);
+  res.headers.set("x-mw", MW_VERSION);
+  res.headers.set("x-auth-reason", reason);
+  return res;
 }
 
-// Не блокируем: эндпоинты NextAuth, страницу входа, статику
-// и webhook отчётов агентов (он защищён собственным секретом x-agent-secret).
 export const config = {
   matcher: ["/((?!api/auth|api/agents/[^/]+/report|login|_next/static|_next/image|favicon.ico|robots.txt).*)"],
 };
