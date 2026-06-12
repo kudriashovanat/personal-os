@@ -8,6 +8,7 @@ const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/drive.file",
+  "https://www.googleapis.com/auth/drive.readonly",
 ].join(" ");
 
 async function refreshAccessToken(token: any) {
