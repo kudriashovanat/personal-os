@@ -96,3 +96,36 @@ alter table content_ideas enable row level security;
 alter table career_items enable row level security;
 alter table goals enable row level security;
 alter table contacts enable row level security;
+
+-- ===== Блок 3: Агенты и тренды =====
+
+-- Журнал запусков агентов. report — произвольный JSON-отчёт (что агент сделал).
+create table if not exists agent_runs (
+  id uuid primary key default gen_random_uuid(),
+  agent text not null,
+  status text not null default 'running' check (status in ('running','ok','error')),
+  trigger text not null default 'manual' check (trigger in ('manual','webhook','schedule')),
+  summary text,
+  report jsonb,
+  error text,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists agent_runs_agent_idx on agent_runs (agent, created_at desc);
+
+-- HR-тренды и сигналы рынка.
+create table if not exists trends (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  summary text,
+  source_url text,
+  signal text,              -- почему это важно / сигнал
+  applied_idea text,        -- как применить (черновик идеи поста)
+  status text not null default 'новое' check (status in ('новое','в работе','в контенте','архив')),
+  created_at timestamptz not null default now()
+);
+create index if not exists trends_created_idx on trends (created_at desc);
+
+alter table agent_runs enable row level security;
+alter table trends enable row level security;
