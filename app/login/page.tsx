@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -11,7 +11,7 @@ function getSafeCallbackUrl(value: string | null) {
   return value;
 }
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { status } = useSession();
@@ -61,5 +61,22 @@ export default function LoginPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center bg-[#f4f2fb]">
+          <div className="rounded-3xl bg-white/80 px-10 py-8 shadow-xl text-center">
+            <div className="text-2xl font-semibold mb-2">Personal OS</div>
+            <div className="text-sm text-slate-500">Открываю пространство…</div>
+          </div>
+        </main>
+      }
+    >
+      <LoginContent />
+    </Suspense>
   );
 }
