@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --aurora-1: rgba(124, 111, 228, 0.14);
+  --aurora-2: rgba(226, 144, 107, 0.10);
+  --aurora-3: rgba(94, 143, 201, 0.10);
+}
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  @apply bg-bg text-ink font-body antialiased;
+  background-image:
+    radial-gradient(60rem 32rem at 8% -10%, var(--aurora-1), transparent 60%),
+    radial-gradient(48rem 28rem at 105% 0%, var(--aurora-2), transparent 55%),
+    radial-gradient(50rem 30rem at 50% 115%, var(--aurora-3), transparent 60%);
+  background-attachment: fixed;
+}
+
+.glass {
+  @apply rounded-xl2 border border-white/70 shadow-card;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.glass-strong {
+  @apply rounded-xl2 border border-white/80 shadow-lift;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.eyebrow {
+  @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-soft;
+}
+
+::selection { background: #E7E3FB; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
