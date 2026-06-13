@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getAgent, runHrTrends, runContentIdeas, runCareerSearch, anthropicConfigured } from "@/lib/agents";
+import { getAgent, runHrTrends, runContentIdeas, runCareerSearch, scoreVacancies, anthropicConfigured } from "@/lib/agents";
 import { getSupabase } from "@/lib/supabase";
+import { DEFAULT_NEW_STATUS } from "@/lib/career";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -43,9 +44,31 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       report = { items };
     } else if (agent.id === "career-search") {
       const { items } = await runCareerSearch();
-      let added = 0;
-      for (const it of items) {
+
+      // Профиль для скоринга. Зависимость из брифа: без cv_text fit_score = вода —
+      // тогда пишем вакансии без оценки (скоринг пропускаем).
+      let profile: any = null;
+      try {
+        const { data } = await sb.from("profile").select("cv_text, target_roles, target_level").limit(1).maybeSingle();
+        profile = data ?? null;
+      } catch { /* таблицы profile ещё нет — без скоринга */ }
+
+      let scores: (any | null)[] = items.map(() => null);
+      let scored = false;
+      if (profile?.cv_text) {
         try {
+          const res = await scoreVacancies(items, profile);
+          scores = res.scores;
+          scored = true;
+        } catch { /* скоринг недоступен — пишем без оценки */ }
+      }
+
+      let added = 0;
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const s = scores[i];
+        try {
+          // career_status_history пишется триггером БД на INSERT — руками не дублируем.
           await sb.from("career_items").insert({
             title: it.title,
             company: it.company ?? null,
@@ -55,13 +78,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             level: it.level ?? null,
             language: it.language ?? null,
             notes: it.notes ?? null,
-            status: "посмотреть",
+            source: it.source ?? null,
+            status: DEFAULT_NEW_STATUS,
+            // Поля скоринга (если был профиль) — иначе остаются null.
+            fit_score: s?.fit_score ?? null,
+            fit_reason: s?.fit_reason ?? null,
+            fit_risks: s?.fit_risks ?? null,
+            to_strengthen: s?.to_strengthen ?? null,
+            level_match: s?.level_match ?? null,
+            salary: s?.salary ?? null,
+            next_action: s?.next_action ?? null,
           });
           added++;
         } catch { /* пропускаем сбойную вставку */ }
       }
-      summary = `Найдено вакансий: ${items.length}, добавлено в Карьеру: ${added}`;
-      report = { items };
+      summary = `Найдено вакансий: ${items.length}, добавлено: ${added}${scored ? ", со скорингом" : " (без скоринга — нет профиля)"}`;
+      report = { items, scored };
     } else if (agent.id === "content-ideas") {
       // Контекст: свежие тренды
       let trends: any[] = [];
