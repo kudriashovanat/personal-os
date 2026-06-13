@@ -709,6 +709,11 @@ function RoundCard({ round, busy, onTranscript, onAnalyze, onDelete }: {
           {a.missed_opportunities && <CalibRow label="Упущено" text={a.missed_opportunities} />}
           {a.objections && <CalibRow label="Возражения" text={a.objections} />}
           {a.recommendations && <CalibRow label="К следующему разу" text={a.recommendations} />}
+          {(a as any).drive_link && (
+            <a href={(a as any).drive_link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-iris-deep hover:underline">
+              <ExternalLink size={12} /> Разбор в Second Brain
+            </a>
+          )}
         </div>
       )}
     </div>

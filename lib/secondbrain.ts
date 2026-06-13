@@ -50,6 +50,27 @@ ${t.signal ? `**Почему важно:** ${t.signal}\n` : ""}${t.applied_idea 
   return { fileName: `${today()}-${slug(t.title)}.md`, body };
 }
 
+export type InterviewAnalysisLike = {
+  strengths?: string | null; weaknesses?: string | null; missed_opportunities?: string | null;
+  objections?: string | null; recommendations?: string | null;
+  questions?: string[] | null; dimension_scores?: Record<string, number> | null;
+};
+export function interviewAnalysisMarkdown(
+  vac: { title: string; company?: string | null },
+  roundType: string | null,
+  a: InterviewAnalysisLike,
+): { fileName: string; body: string } {
+  const fm = yaml({ type: "interview-debrief", title: `${vac.title}${roundType ? ` · ${roundType}` : ""}`, company: vac.company ?? "", date: today(), tags: "#interview #career" });
+  const dims = a.dimension_scores && Object.keys(a.dimension_scores).length
+    ? "\n## Оценки по осям\n" + Object.entries(a.dimension_scores).map(([k, v]) => `- ${k}: ${v}/10`).join("\n") + "\n"
+    : "";
+  const qs = a.questions?.length ? "\n## Вопросы\n" + a.questions.map((q) => `- ${q}`).join("\n") + "\n" : "";
+  const body = `${fm}
+# Разбор интервью · ${vac.title}${roundType ? ` (${roundType})` : ""}
+${a.strengths ? `\n## Сильно\n${a.strengths}\n` : ""}${a.weaknesses ? `\n## Слабо\n${a.weaknesses}\n` : ""}${a.missed_opportunities ? `\n## Упущено\n${a.missed_opportunities}\n` : ""}${a.objections ? `\n## Возражения\n${a.objections}\n` : ""}${dims}${qs}${a.recommendations ? `\n## К следующему разу\n${a.recommendations}\n` : ""}`;
+  return { fileName: `${today()}-debrief-${slug(vac.title)}.md`, body };
+}
+
 export type ContentIdeaLike = { title: string; platform?: string | null; topic?: string | null; hook?: string | null };
 export function contentIdeaMarkdown(c: ContentIdeaLike): { fileName: string; body: string } {
   const fm = yaml({ type: "content-idea", title: c.title, platform: c.platform ?? "", date: today(), tags: "#content-idea" });

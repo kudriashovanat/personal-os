@@ -17,6 +17,7 @@ npm install
 - [ ] `supabase/migrations/0002_second_brain.sql` — указатели `drive_id` / `drive_link` в `trends` и `content_ideas`.
 - [ ] `supabase/migrations/0003_uploads.sql` — таблица `uploads` (индекс загруженных файлов).
 - [ ] `supabase/migrations/0004_learning.sql` — таблица `learning_items` (карточки English/Hebrew с SRS).
+- [ ] `supabase/migrations/0005_interview_drive.sql` — `drive_id`/`drive_link` на `interview_analyses` (Debrief → Drive).
 
 ## 3. Переменные окружения
 
@@ -30,6 +31,19 @@ npm install
 | `UPLOADS_FOLDER_ID` | папка «Personal OS Uploads» | загрузка файлов вернёт ошибку |
 | `TELEGRAM_BOT_TOKEN` | бот от @BotFather | кнопка «В Telegram» вернёт ошибку |
 | `TELEGRAM_CHAT_ID` | твой chat id (@userinfobot) | то же |
+| `AGENT_CRON_SECRET` | секрет для cron-роутов `/api/cron/[agent]` | автозапуск отключён (понятная ошибка 503) |
+| `CRON_SECRET` | тем же значением — Vercel Cron шлёт его в Authorization | Vercel-cron не пройдёт проверку |
+
+### Автозапуск агентов (Vercel Cron)
+
+`vercel.json` уже задаёт расписание (время **UTC**; указано ≈ для Израиля летом, UTC+3):
+
+- `0 5 * * *` → ~08:00 — Career Search
+- `30 5 * * *` → ~08:30 — Career Scoring
+- `0 6 * * *` → ~09:00 — HR Trends
+- `0 7 * * *` → ~10:00 — Content Ideas
+
+Установи `AGENT_CRON_SECRET` и `CRON_SECRET` (одно значение). Каждый агент — отдельный лёгкий запрос (не два тяжёлых сразу). Автономный запуск пишет в Supabase; Drive-проекция без сессии пропускается (Drive-sync кнопкой — позже). **Лимит Vercel Hobby: 2 cron-джоба, раз в день** — если на Hobby, оставь career-search + career-score, остальные запускай вручную или внешним планировщиком.
 
 > ID папки Drive — из URL после `/folders/`. Папки создай внутри своего Obsidian Vault.
 

@@ -161,7 +161,8 @@ export async function runContentIdeas(context: { trends?: TrendItem[]; notes?: s
 ${ctx ? "Контекст:\n" + ctx + "\n\n" : ""}Предложи 5 идей постов. Половина — Telegram (короткие, личные), половина — LinkedIn (профессиональные).
 Верни ТОЛЬКО валидный JSON-массив без markdown:
 [{"title":"короткий заголовок","platform":"Telegram"|"LinkedIn","topic":"о чём","hook":"цепляющая первая фраза"}]`;
-  const { text } = await callAnthropic(prompt, { maxTokens: 2000 });
+  // Haiku: идеи-заготовки дешевле; финальный пост всё равно разворачивает Sonnet (draftPost).
+  const { text } = await callAnthropic(prompt, { model: MODEL_TIER.haiku, maxTokens: 1600 });
   const items = parseJsonLoose<ContentIdeaItem[]>(text);
   return { items: Array.isArray(items) ? items.slice(0, 8) : [], modelText: text };
 }
@@ -468,7 +469,8 @@ export async function generateLearningItems(
 Для каждой единицы верни ТОЛЬКО валидный JSON-массив без markdown:
 [{"term":"слово на иврите (с огласовками, если уместно)","translation":"перевод на русский","transliteration":"русская транслитерация произношения","part_of_speech":"noun|verb|phrase|...","example":"короткая фраза на иврите + перевод","note":"подсказка по употреблению","category":"everyday","level":"A1"}]`;
 
-  const { text } = await callAnthropic(prompt, { model: MODEL_TIER.sonnet, maxTokens: 2500 });
+  // Haiku: генерация лексики в этом качестве не теряет, но заметно дешевле.
+  const { text } = await callAnthropic(prompt, { model: MODEL_TIER.haiku, maxTokens: 2200 });
   const raw = parseJsonLoose<any[]>(text);
   const known = new Set(existing.map((t) => t.trim().toLowerCase()));
   const s = (v: any) => (typeof v === "string" && v.trim() ? v.trim() : null);

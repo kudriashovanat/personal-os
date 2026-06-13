@@ -1,0 +1,8 @@
+{
+  "crons": [
+    { "path": "/api/cron/career-search", "schedule": "0 5 * * *" },
+    { "path": "/api/cron/career-score", "schedule": "30 5 * * *" },
+    { "path": "/api/cron/hr-trends", "schedule": "0 6 * * *" },
+    { "path": "/api/cron/content-ideas", "schedule": "0 7 * * *" }
+  ]
+}
