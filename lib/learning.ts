@@ -7,10 +7,13 @@ export const LANG_LABEL: Record<Lang, string> = { en: "English", he: "עברית
 
 export type LearningStatus = "new" | "learning" | "known";
 
+/** Порог «выучено» по Leitner-боксу. */
+export const LEARNED_BOX = 4;
+
 /** Статус карточки выводится из box и числа повторов. */
 export function statusOf(box: number, reviews: number): LearningStatus {
   if (reviews === 0) return "new";
-  if (box >= 5) return "known";
+  if (box >= LEARNED_BOX) return "known";
   return "learning";
 }
 

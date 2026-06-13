@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, CalendarDays, Sparkles } from "lucide-react";
-import { Card, Progress, Badge, Empty } from "@/components/ui";
+import { Card, Progress, Badge, Empty, Button } from "@/components/ui";
 import { ruDate, greeting, todayISO, CATEGORY_STYLE, cn, type Category } from "@/lib/utils";
 
 type Task = { id: string; title: string; category: Category; priority: number; status: string };
@@ -168,7 +168,7 @@ export default function TodayPage() {
         </div>
       </div>
 
-      {(wotd?.en || wotd?.he) && (
+      {(wotd?.en || wotd?.he) ? (
         <div className="mt-4">
           <div className="eyebrow mb-2">Слова дня</div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -176,7 +176,14 @@ export default function TodayPage() {
             {wotd?.he && <WordCard item={wotd.he} label="עברית" rtl />}
           </div>
         </div>
-      )}
+      ) : wotd && !wotd.en && !wotd.he ? (
+        <div className="mt-4">
+          <Card className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm text-soft">Слова дня появятся, когда добавишь карточки для изучения.</span>
+            <Link href="/learning"><Button variant="soft">Добавить первые карточки</Button></Link>
+          </Card>
+        </div>
+      ) : null}
     </div>
   );
 }
