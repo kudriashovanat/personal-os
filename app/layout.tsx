@@ -6,6 +6,12 @@ export const metadata: Metadata = {
   title: "Personal OS",
   description: "Личный центр управления",
   robots: { index: false, follow: false },
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+  },
 };
 
 export const viewport: Viewport = {
