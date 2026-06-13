@@ -264,8 +264,8 @@ export default function CareerPage() {
             const col = byStatus.get(status)!;
             const meta = STATUS_META[status];
             return (
-              <div key={status} className="w-[270px] shrink-0 snap-start">
-                <div className="mb-2 flex items-center gap-2 px-1">
+              <div key={status} className="flex w-[272px] shrink-0 snap-start flex-col rounded-2xl border border-white/40 bg-white/25 p-2.5 backdrop-blur-md">
+                <div className="mb-2 flex items-center gap-2 px-1.5 pt-0.5">
                   <span className={cn("h-2 w-2 rounded-full", meta.dot)} />
                   <span className="text-sm font-semibold">{status}</span>
                   <span className="text-xs text-soft">{col.length}</span>
@@ -275,7 +275,7 @@ export default function CareerPage() {
                     <button
                       key={i.id}
                       onClick={() => setOpenId(i.id)}
-                      className="glass group flex flex-col gap-2 p-3 text-left transition hover:shadow-lift"
+                      className="group flex flex-col gap-2 rounded-xl border border-white/55 bg-white/55 p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-white/70 hover:bg-white/70 hover:shadow-card"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="font-display text-sm font-semibold leading-snug">{i.title}</div>
@@ -291,7 +291,7 @@ export default function CareerPage() {
                       </div>
                     </button>
                   ))}
-                  {col.length === 0 && <div className="rounded-xl border border-dashed border-line py-4 text-center text-xs text-soft/60">пусто</div>}
+                  {col.length === 0 && <div className="rounded-xl border border-dashed border-white/50 py-5 text-center text-xs text-soft/60">пусто</div>}
                 </div>
               </div>
             );

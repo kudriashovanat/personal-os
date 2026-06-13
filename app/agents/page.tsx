@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Card, SectionTitle, Badge, Button } from "@/components/ui";
-import { Briefcase, TrendingUp, PenLine, CalendarDays, Send, Newspaper, Laptop, Play, Loader2, X, CheckCircle2, AlertCircle, Webhook } from "lucide-react";
+import { Briefcase, TrendingUp, PenLine, CalendarDays, Send, Newspaper, Laptop, Play, Loader2, X, CheckCircle2, AlertCircle, Webhook, RefreshCw } from "lucide-react";
 
 type Agent = { id: string; name: string; desc: string; runnable: boolean; via: string };
 type Run = { id: string; agent: string; status: string; trigger: string; summary?: string; report?: any; error?: string; created_at: string; finished_at?: string };
@@ -25,6 +25,23 @@ export default function AgentsPage() {
   const [running, setRunning] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ id: string; text: string; ok: boolean } | null>(null);
   const [reportOf, setReportOf] = useState<Run | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  async function syncDrive() {
+    setSyncing(true); setSyncMsg(null);
+    try {
+      const r = await fetch("/api/sync-drive", { method: "POST" });
+      const raw = await r.text();
+      let d: any = null; try { d = raw ? JSON.parse(raw) : null; } catch {}
+      if (!r.ok || !d) throw new Error(d?.error || "Не удалось синхронизировать");
+      setSyncMsg({ text: d.summary || "Готово", ok: true });
+    } catch (e: any) {
+      setSyncMsg({ text: e.message, ok: false });
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   const load = useCallback(async () => {
     const r = await fetch("/api/agents");
@@ -61,7 +78,15 @@ export default function AgentsPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <SectionTitle eyebrow="Команда помощников" title="Агенты" />
+      <SectionTitle
+        eyebrow="Команда помощников"
+        title="Агенты"
+        action={<Button variant="soft" onClick={syncDrive} disabled={syncing}><RefreshCw size={15} className={syncing ? "animate-spin" : ""} /> {syncing ? "Синхронизирую…" : "Sync to Second Brain"}</Button>}
+      />
+
+      {syncMsg && (
+        <div className={`rounded-xl px-4 py-2.5 text-sm ${syncMsg.ok ? "bg-sage-soft/60 text-ink/80" : "bg-rose-soft text-rose"}`}>{syncMsg.text}</div>
+      )}
 
       {!anthropicReady && (
         <div className="rounded-xl bg-butter-soft px-4 py-3 text-sm text-ink/70">
