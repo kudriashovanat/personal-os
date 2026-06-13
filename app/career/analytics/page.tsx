@@ -33,6 +33,8 @@ export default function CareerAnalyticsPage() {
         <div className="flex flex-col gap-4">
           <Insights a={a} />
 
+          <DueList due={a.actionsDue} />
+
           {/* KPI-ряд */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Kpi label="Откликов/день (7д)" value={a.appsPerDay.last7Avg} suffix={`/ ${a.appsPerDay.target}`}
@@ -125,6 +127,10 @@ function Insights({ a }: { a: Analytics }) {
   if (a.fit.disciplinePct != null && a.fit.disciplinePct < 50) {
     out.push({ tone: "warn", text: `Fit-дисциплина низкая: только ${a.fit.disciplinePct}% откликов на роли с fit ≥7. Откликов много, но не на лучшие совпадения.` });
   }
+  const overdue = a.actionsDue.filter((d) => d.overdue).length;
+  if (a.actionsDue.length > 0) {
+    out.push({ tone: overdue ? "warn" : "info", text: `${a.actionsDue.length} действий на сегодня${overdue ? ` (${overdue} просрочено)` : ""}. Список — «Сделать сегодня».` });
+  }
   if (a.cold.length > 0) {
     out.push({ tone: "info", text: `${a.cold.length} заявок остыли (нет ответа неделю+). Follow-up по ним — ниже.` });
   }
@@ -141,6 +147,25 @@ function Insights({ a }: { a: Analytics }) {
           </li>
         ))}
       </ul>
+    </Card>
+  );
+}
+
+function DueList({ due }: { due: Analytics["actionsDue"] }) {
+  if (!due.length) return null;
+  return (
+    <Card>
+      <Header title="Сделать сегодня" subtitle="next_action со сроком на сегодня или просроченные" />
+      <div className="flex flex-col gap-2">
+        {due.map((d) => (
+          <div key={d.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-line/70 p-2.5 text-sm">
+            <span className="font-semibold">{d.title}</span>
+            {d.company && <span className="text-xs text-soft">{d.company}</span>}
+            {d.action && <span className="text-soft">— {d.action}</span>}
+            <Badge className={cn("ml-auto", d.overdue ? "bg-rose-soft text-rose" : "bg-butter-soft text-butter")}>{d.overdue ? `просрочено · ${d.date}` : d.date}</Badge>
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }

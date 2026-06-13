@@ -3,34 +3,63 @@
 @tailwind utilities;
 
 :root {
-  --aurora-1: rgba(124, 111, 228, 0.14);
-  --aurora-2: rgba(226, 144, 107, 0.10);
-  --aurora-3: rgba(94, 143, 201, 0.10);
+  /* Мягкая воздушная палитра mesh (приглушённая, не «единорог») */
+  --bloom-1: #B7AEE0; /* пыльная лаванда */
+  --bloom-2: #E6C3C9; /* глина-роза */
+  --bloom-3: #AFC6E6; /* сдержанное небо */
+  --bloom-4: #BFD9C9; /* эвкалипт */
 }
 
 html { -webkit-text-size-adjust: 100%; }
 
 body {
   @apply bg-bg text-ink font-body antialiased;
-  background-image:
-    radial-gradient(60rem 32rem at 8% -10%, var(--aurora-1), transparent 60%),
-    radial-gradient(48rem 28rem at 105% 0%, var(--aurora-2), transparent 55%),
-    radial-gradient(50rem 30rem at 50% 115%, var(--aurora-3), transparent 60%);
-  background-attachment: fixed;
+  background-color: #F7F6FB;
 }
 
+/* Анимированный «дышащий» mesh-фон — отдельный слой за контентом. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -25%;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.55;
+  filter: blur(40px);
+  background-image:
+    radial-gradient(40% 40% at 16% 20%, var(--bloom-1) 0%, transparent 62%),
+    radial-gradient(38% 38% at 86% 14%, var(--bloom-2) 0%, transparent 62%),
+    radial-gradient(46% 46% at 80% 88%, var(--bloom-3) 0%, transparent 64%),
+    radial-gradient(42% 42% at 16% 90%, var(--bloom-4) 0%, transparent 62%);
+  animation: breathe 24s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.08) rotate(2deg); }
+}
+
+/* Прозрачное морозное стекло + мягкое свечение. */
 .glass {
-  @apply rounded-xl2 border border-white/70 shadow-card;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  @apply rounded-xl2 shadow-card;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(22px) saturate(1.1);
+  -webkit-backdrop-filter: blur(22px) saturate(1.1);
+  transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease;
+}
+.glass:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 54px rgba(124, 111, 196, 0.20), 0 4px 12px rgba(40, 35, 60, 0.06);
+  border-color: rgba(255, 255, 255, 0.8);
 }
 
 .glass-strong {
-  @apply rounded-xl2 border border-white/80 shadow-lift;
-  background: rgba(255, 255, 255, 0.86);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  @apply rounded-xl2 shadow-lift;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(26px) saturate(1.15);
+  -webkit-backdrop-filter: blur(26px) saturate(1.15);
 }
 
 .eyebrow {

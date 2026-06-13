@@ -4,8 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, SectionTitle, Button, Input, Select, Textarea, Badge, Chip, Empty } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { CAREER_STATUSES, normalizeStatus, DEFAULT_NEW_STATUS, type CareerStatus } from "@/lib/career";
-import type { Calibration } from "@/lib/agents";
+import { CAREER_STATUSES, normalizeStatus, DEFAULT_NEW_STATUS, DIMENSION_AXES, ROUND_TYPES, ROUND_LABEL, type CareerStatus } from "@/lib/career";
+import type { Calibration, InterviewPrep, InterviewAnalysis, DebriefPattern, RejectionClassification } from "@/lib/agents";
+
+const LIKELIHOOD_META: Record<string, string> = {
+  high: "bg-rose-soft text-rose", medium: "bg-butter-soft text-butter", low: "bg-line text-soft",
+};
 import { ExternalLink, Trash2, Languages, X, Sparkles, BarChart3, Compass } from "lucide-react";
 
 const VERDICT_META: Record<Calibration["verdict"], { label: string; cls: string }> = {
@@ -26,6 +30,7 @@ type Item = {
   remote: boolean;
   level: string | null;
   hebrew_required: boolean;
+  language: string | null;
   status: string;
   notes: string | null;
   // Поля Career CRM (могут отсутствовать, пока миграция не применена — тогда undefined).
@@ -367,12 +372,18 @@ function Drawer({ item, onClose, onPatch, onRemove }: {
               className="inline-flex items-center gap-1 rounded-full bg-iris-soft px-2.5 py-1 text-xs font-semibold text-iris-deep hover:bg-[#dcd6f8] disabled:opacity-50">
               <Compass size={11} /> {calibLoading ? "Калибрую…" : "Calibrate"}
             </button>
-            {[["Score", "Sprint 2"], ["Cover Letter", "Sprint 2"], ["Prepare", "Sprint 3"]].map(([label, when]) => (
-              <button key={label} disabled title={`Скоро · ${when}`}
-                className="inline-flex items-center gap-1 rounded-full bg-white/60 px-2.5 py-1 text-xs font-semibold text-soft/60">
-                <Sparkles size={11} /> {label}
-              </button>
-            ))}
+            <button onClick={() => setTab("Документы")}
+              className="inline-flex items-center gap-1 rounded-full bg-iris-soft px-2.5 py-1 text-xs font-semibold text-iris-deep hover:bg-[#dcd6f8]">
+              <Sparkles size={11} /> Документы
+            </button>
+            <button onClick={() => setTab("Интервью")}
+              className="inline-flex items-center gap-1 rounded-full bg-iris-soft px-2.5 py-1 text-xs font-semibold text-iris-deep hover:bg-[#dcd6f8]">
+              <Sparkles size={11} /> Prepare
+            </button>
+            <button disabled title="Скоро · Sprint 5"
+              className="inline-flex items-center gap-1 rounded-full bg-white/60 px-2.5 py-1 text-xs font-semibold text-soft/60">
+              <Sparkles size={11} /> Score
+            </button>
           </div>
           {calibError && <div className="mt-2 text-xs text-rose">{calibError}</div>}
           {calib && (
@@ -402,9 +413,9 @@ function Drawer({ item, onClose, onPatch, onRemove }: {
         <div className="flex-1 overflow-y-auto p-4">
           {tab === "Overview" && <OverviewTab item={item} onPatch={onPatch} />}
           {tab === "Fit" && <FitTab item={item} />}
-          {tab === "Документы" && <Empty title="Документы" hint="Cover letter, сообщение рекрутеру и CV-версии появятся здесь (Sprint 2)." />}
-          {tab === "Интервью" && <Empty title="Интервью" hint="Раунды интервью и разбор транскриптов — Sprint 3. Транскрипт вставляется вручную." />}
-          {tab === "Отказ" && <Empty title="Отказ" hint="Захват и классификация причины отказа — Sprint 4." />}
+          {tab === "Документы" && <DocsTab item={item} />}
+          {tab === "Интервью" && <InterviewsTab item={item} />}
+          {tab === "Отказ" && <RejectionTab item={item} onPatch={onPatch} />}
         </div>
       </div>
     </div>
@@ -434,12 +445,48 @@ function OverviewTab({ item, onPatch }: { item: Item; onPatch: (id: string, p: P
   useEffect(() => setLocal(item), [item.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const blur = (p: Partial<Item>) => onPatch(item.id, p);
 
+  // Сохраняем title только если не пустой (колонка NOT NULL).
+  const saveTitle = () => { const t = (local.title ?? "").trim(); if (t && t !== item.title) blur({ title: t }); };
+
   return (
     <div className="flex flex-col gap-4">
+      {/* Редактируемые данные вакансии */}
+      <Field label="Роль">
+        <Input value={local.title ?? ""} onChange={(e) => setLocal({ ...local, title: e.target.value })} onBlur={saveTitle} placeholder="Название роли" />
+      </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Источник">{item.source ? <a href={item.link ?? "#"} className="text-sm text-iris-deep">{item.source}</a> : <span className="text-sm text-soft">—</span>}</Field>
-        <Field label="Зарплата"><span className="text-sm">{item.salary || "—"}</span></Field>
+        <Field label="Компания">
+          <Input value={local.company ?? ""} onChange={(e) => setLocal({ ...local, company: e.target.value })} onBlur={() => blur({ company: local.company || null })} placeholder="Компания" />
+        </Field>
+        <Field label="Локация / страна">
+          <Input value={local.country ?? ""} onChange={(e) => setLocal({ ...local, country: e.target.value })} onBlur={() => blur({ country: local.country || null })} placeholder="Израиль / remote" />
+        </Field>
+        <Field label="Уровень">
+          <Input value={local.level ?? ""} onChange={(e) => setLocal({ ...local, level: e.target.value })} onBlur={() => blur({ level: local.level || null })} placeholder="mid / senior…" />
+        </Field>
+        <Field label="Язык">
+          <Input value={local.language ?? ""} onChange={(e) => setLocal({ ...local, language: e.target.value })} onBlur={() => blur({ language: local.language || null })} placeholder="English…" />
+        </Field>
       </div>
+      <Field label="Ссылка на вакансию">
+        <Input value={local.link ?? ""} onChange={(e) => setLocal({ ...local, link: e.target.value })} onBlur={() => blur({ link: local.link || null })} placeholder="https://…" />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Зарплата">
+          <Input value={local.salary ?? ""} onChange={(e) => setLocal({ ...local, salary: e.target.value })} onBlur={() => blur({ salary: local.salary || null })} placeholder="если известна" />
+        </Field>
+        <Field label="Источник">{item.source ? <a href={item.link ?? "#"} className="text-sm text-iris-deep">{item.source}</a> : <span className="text-sm text-soft">из ссылки</span>}</Field>
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-1.5 text-sm text-soft">
+          <input type="checkbox" checked={!!local.remote} onChange={(e) => { setLocal({ ...local, remote: e.target.checked }); blur({ remote: e.target.checked }); }} className="accent-iris" /> Remote
+        </label>
+        <label className="flex items-center gap-1.5 text-sm text-soft">
+          <input type="checkbox" checked={!!local.hebrew_required} onChange={(e) => { setLocal({ ...local, hebrew_required: e.target.checked }); blur({ hebrew_required: e.target.checked }); }} className="accent-iris" /> Нужен иврит
+        </label>
+      </div>
+
+      <div className="border-t border-line/60 pt-1" />
 
       <Field label="Следующий шаг">
         <Textarea rows={2} value={local.next_action ?? ""} onChange={(e) => setLocal({ ...local, next_action: e.target.value })} onBlur={() => blur({ next_action: local.next_action })} placeholder="Что сделать дальше" />
@@ -473,6 +520,321 @@ function OverviewTab({ item, onPatch }: { item: Item; onPatch: (id: string, p: P
           {BUCKETS.map((b) => <option key={b}>{b}</option>)}
         </Select>
       </Field>
+    </div>
+  );
+}
+
+type Round = {
+  id: string;
+  round_type: string | null;
+  scheduled_at: string | null;
+  transcript: string | null;
+  analysis: (InterviewAnalysis & { id: string }) | null;
+};
+
+function InterviewsTab({ item }: { item: Item }) {
+  const [rounds, setRounds] = useState<Round[] | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [nf, setNf] = useState({ round_type: ROUND_TYPES[0] as string, scheduled_at: "", transcript: "" });
+  const [busy, setBusy] = useState<string | null>(null);
+  const [prep, setPrep] = useState<InterviewPrep | null>(null);
+  const [prepState, setPrepState] = useState<"idle" | "loading" | string>("idle");
+  const [pattern, setPattern] = useState<DebriefPattern | null>(null);
+  const [patternMsg, setPatternMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/career/interviews?career_item_id=${item.id}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setRounds(Array.isArray(d) ? d : []))
+      .catch(() => setRounds([]));
+  }, [item.id]);
+
+  async function addRound() {
+    const r = await fetch("/api/career/interviews", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ career_item_id: item.id, ...nf, scheduled_at: nf.scheduled_at || null }),
+    });
+    if (r.ok) {
+      const created = await r.json();
+      setRounds((p) => [...(p ?? []), created]);
+      setNf({ round_type: ROUND_TYPES[0], scheduled_at: "", transcript: "" });
+      setAdding(false);
+    }
+  }
+  async function patchRound(id: string, p: Partial<Round>) {
+    setRounds((prev) => (prev ?? []).map((r) => (r.id === id ? { ...r, ...p } : r)));
+    await fetch("/api/career/interviews", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...p }) });
+  }
+  async function delRound(id: string) {
+    setRounds((prev) => (prev ?? []).filter((r) => r.id !== id));
+    await fetch("/api/career/interviews", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+  }
+  async function analyze(id: string) {
+    setBusy(id);
+    try {
+      const r = await fetch("/api/career/interviews/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ interview_id: id }) });
+      const d = await r.json();
+      if (r.ok) setRounds((prev) => (prev ?? []).map((x) => (x.id === id ? { ...x, analysis: d } : x)));
+      else alert(d.error || "Не удалось разобрать");
+    } finally { setBusy(null); }
+  }
+  async function prepare() {
+    setPrepState("loading"); setPrep(null);
+    try {
+      const r = await fetch("/api/career/prepare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Не удалось");
+      setPrep(d); setPrepState("idle");
+    } catch (e: any) { setPrepState(e.message); }
+  }
+  async function loadPattern() {
+    setPatternMsg("Считаю…"); setPattern(null);
+    const r = await fetch(`/api/career/debrief?career_item_id=${item.id}`);
+    const d = await r.json();
+    if (!r.ok) setPatternMsg(d.error || "Ошибка");
+    else if (!d.pattern) setPatternMsg(`Нужно минимум 2 разбора (сейчас ${d.count}).`);
+    else { setPattern(d.pattern); setPatternMsg(null); }
+  }
+
+  if (!rounds) return <div className="h-20 animate-pulse rounded-xl bg-line/60" />;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Prepare */}
+      <div className="rounded-xl border border-line/70 p-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold">Подготовка к интервью</span>
+          <Button variant="soft" className="ml-auto !py-1 text-xs" onClick={prepare} disabled={prepState === "loading"}>
+            {prepState === "loading" ? "Готовлю…" : "Сгенерировать"}
+          </Button>
+        </div>
+        {typeof prepState === "string" && prepState !== "idle" && prepState !== "loading" && <div className="mt-1 text-xs text-rose">{prepState}</div>}
+        {prep && (
+          <div className="mt-2 flex flex-col gap-2 text-sm">
+            <ListBlock label="Вероятные вопросы" items={prep.likely_questions} />
+            <ListBlock label="Твои истории под них" items={prep.story_points} />
+            {prep.positioning && <CalibRow label="Позиционирование" text={prep.positioning} />}
+            <ListBlock label="Спросить интервьюера" items={prep.questions_to_ask} />
+          </div>
+        )}
+      </div>
+
+      {/* Pattern (debrief через несколько раундов) */}
+      <div className="rounded-xl border border-line/70 p-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold">Паттерн по раундам</span>
+          <Button variant="ghost" className="ml-auto !py-1 text-xs" onClick={loadPattern}>Обновить</Button>
+        </div>
+        {patternMsg && <div className="mt-1 text-xs text-soft">{patternMsg}</div>}
+        {pattern && (
+          <div className="mt-2 flex flex-col gap-2 text-sm">
+            <CalibRow label="Паттерн" text={pattern.pattern} />
+            <ListBlock label="Повторяющиеся провалы" items={pattern.recurring_weak_spots} />
+            <ListBlock label="Повторяющиеся сильные" items={pattern.recurring_strengths} />
+            {pattern.fix_focus && <CalibRow label="Фокус" text={pattern.fix_focus} />}
+          </div>
+        )}
+      </div>
+
+      {/* Rounds */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold">Раунды ({rounds.length})</span>
+        <Button variant="soft" className="!py-1 text-xs" onClick={() => setAdding((v) => !v)}>{adding ? "Отмена" : "+ Раунд"}</Button>
+      </div>
+
+      {adding && (
+        <div className="flex flex-col gap-2 rounded-xl border border-line/70 p-3">
+          <div className="flex gap-2">
+            <Select value={nf.round_type} onChange={(e) => setNf({ ...nf, round_type: e.target.value })} className="!py-1.5 text-xs">
+              {ROUND_TYPES.map((t) => <option key={t} value={t}>{ROUND_LABEL[t]}</option>)}
+            </Select>
+            <Input type="date" value={nf.scheduled_at} onChange={(e) => setNf({ ...nf, scheduled_at: e.target.value })} className="!py-1.5 text-xs" />
+          </div>
+          <Textarea rows={4} placeholder="Транскрипт раунда (вставь вручную)" value={nf.transcript} onChange={(e) => setNf({ ...nf, transcript: e.target.value })} />
+          <Button className="self-end !py-1 text-xs" onClick={addRound}>Добавить раунд</Button>
+        </div>
+      )}
+
+      {rounds.length === 0 && !adding && <Empty title="Раундов нет" hint="Добавь раунд и вставь транскрипт — система разберёт его." />}
+
+      {rounds.map((r) => (
+        <RoundCard key={r.id} round={r} busy={busy === r.id}
+          onTranscript={(t) => patchRound(r.id, { transcript: t })}
+          onAnalyze={() => analyze(r.id)} onDelete={() => delRound(r.id)} />
+      ))}
+    </div>
+  );
+}
+
+function RoundCard({ round, busy, onTranscript, onAnalyze, onDelete }: {
+  round: Round; busy: boolean; onTranscript: (t: string) => void; onAnalyze: () => void; onDelete: () => void;
+}) {
+  const [t, setT] = useState(round.transcript ?? "");
+  const a = round.analysis;
+  return (
+    <div className="rounded-xl border border-line/70 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <Badge className="bg-iris-soft text-iris-deep">{ROUND_LABEL[round.round_type ?? "other"] ?? round.round_type}</Badge>
+        {round.scheduled_at && <span className="text-xs text-soft">{round.scheduled_at.slice(0, 10)}</span>}
+        <button onClick={onDelete} aria-label="Удалить раунд" className="ml-auto rounded-full p-1 text-soft/50 hover:bg-rose-soft hover:text-rose"><Trash2 size={13} /></button>
+      </div>
+      <Textarea rows={4} value={t} onChange={(e) => setT(e.target.value)} onBlur={() => t !== round.transcript && onTranscript(t)} placeholder="Транскрипт раунда" />
+      <div className="mt-2 flex items-center gap-2">
+        <Button variant="soft" className="!py-1 text-xs" onClick={onAnalyze} disabled={busy || t.trim().length < 50}>
+          {busy ? "Разбираю…" : a ? "Разобрать заново" : "Разобрать"}
+        </Button>
+        {t.trim().length < 50 && <span className="text-xs text-soft">нужен транскрипт</span>}
+      </div>
+
+      {a && (
+        <div className="mt-3 flex flex-col gap-3 border-t border-line/60 pt-3 text-sm">
+          {a.dimension_scores && Object.keys(a.dimension_scores).length > 0 && (
+            <div className="flex flex-col gap-1">
+              {DIMENSION_AXES.filter((ax) => ax in a.dimension_scores).map((ax) => {
+                const v = a.dimension_scores[ax];
+                return (
+                  <div key={ax} className="flex items-center gap-2">
+                    <span className="w-36 shrink-0 text-xs text-soft">{ax}</span>
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-line">
+                      <div className={cn("h-full rounded-full", v >= 7 ? "bg-sage" : v >= 4 ? "bg-butter" : "bg-rose")} style={{ width: `${v * 10}%` }} />
+                    </div>
+                    <span className="w-5 text-right text-xs font-semibold tabular-nums">{v}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {a.strengths && <CalibRow label="Сильно" text={a.strengths} />}
+          {a.weaknesses && <CalibRow label="Слабо" text={a.weaknesses} />}
+          {a.missed_opportunities && <CalibRow label="Упущено" text={a.missed_opportunities} />}
+          {a.objections && <CalibRow label="Возражения" text={a.objections} />}
+          {a.recommendations && <CalibRow label="К следующему разу" text={a.recommendations} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ListBlock({ label, items }: { label: string; items: string[] }) {
+  if (!items?.length) return null;
+  return (
+    <div>
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-soft">{label}</div>
+      <ul className="mt-0.5 list-disc pl-4">
+        {items.map((x, i) => <li key={i} className="leading-relaxed">{x}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+function RejectionTab({ item, onPatch }: { item: Item; onPatch: (id: string, p: Partial<Item>) => void }) {
+  const [raw, setRaw] = useState("");
+  const [result, setResult] = useState<RejectionClassification | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/career/rejection?career_item_id=${item.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) { setRaw(d.raw_text ?? ""); setResult(d.classified_reasons ?? null); } })
+      .catch(() => {});
+  }, [item.id]);
+
+  async function classify() {
+    if (raw.trim().length < 5) return;
+    setLoading(true); setErr(null);
+    try {
+      const r = await fetch("/api/career/rejection", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id, raw_text: raw }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Не удалось");
+      setResult(d.classified_reasons ?? null);
+    } catch (e: any) { setErr(e.message); } finally { setLoading(false); }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <Textarea rows={5} value={raw} onChange={(e) => setRaw(e.target.value)} placeholder="Вставь текст отказа или контекст (письмо рекрутера, причина)…" />
+      <div className="flex items-center gap-2">
+        {normalizeStatus(item.status) !== "Отказ" && (
+          <Button variant="ghost" className="!py-1 text-xs" onClick={() => onPatch(item.id, { status: "Отказ" })}>Отметить как Отказ</Button>
+        )}
+        {err && <span className="text-xs text-rose">{err}</span>}
+        <Button variant="soft" className="ml-auto !py-1 text-xs" onClick={classify} disabled={loading || raw.trim().length < 5}>
+          {loading ? "Анализирую…" : "Классифицировать"}
+        </Button>
+      </div>
+
+      {result && (
+        <div className="flex flex-col gap-3">
+          {result.summary && <div className="rounded-lg bg-white/70 p-2.5 text-sm font-medium">{result.summary}</div>}
+          <div className="flex flex-col gap-2">
+            {result.reasons.map((r, i) => (
+              <div key={i} className="rounded-xl border border-line/70 p-2.5 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">{i + 1}. {r.reason}</span>
+                  <Badge className={cn("ml-auto", LIKELIHOOD_META[r.likelihood])}>{r.likelihood}</Badge>
+                </div>
+                {r.note && <div className="mt-1 text-soft">{r.note}</div>}
+              </div>
+            ))}
+          </div>
+          {result.positioning_verdict && (
+            <div className="rounded-xl bg-iris-soft/60 p-3 text-sm">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-iris-deep">Позиционный вывод</div>
+              <div className="mt-1 leading-relaxed">{result.positioning_verdict}</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocsTab({ item }: { item: Item }) {
+  const [loading, setLoading] = useState<"cover" | "recruiter" | null>(null);
+  const [text, setText] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function gen(k: "cover" | "recruiter") {
+    setLoading(k);
+    setText("");
+    setErr(null);
+    setCopied(false);
+    try {
+      const r = await fetch("/api/career/document", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id, kind: k }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Не удалось");
+      setText(d.text);
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex gap-2">
+        <Button variant="soft" className="flex-1" onClick={() => gen("recruiter")} disabled={loading !== null}>
+          {loading === "recruiter" ? "Пишу…" : "Сообщение рекрутеру"}
+        </Button>
+        <Button variant="soft" className="flex-1" onClick={() => gen("cover")} disabled={loading !== null}>
+          {loading === "cover" ? "Пишу…" : "Cover letter"}
+        </Button>
+      </div>
+      <p className="text-xs text-soft">Текст генерируется для ручной отправки — ничего не отправляется автоматически.</p>
+      {err && <div className="text-sm text-rose">{err}</div>}
+      {text && (
+        <div>
+          <Textarea rows={10} value={text} onChange={(e) => setText(e.target.value)} />
+          <Button variant="ghost" className="mt-2" onClick={() => { navigator.clipboard?.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}>
+            {copied ? "Скопировано" : "Копировать"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

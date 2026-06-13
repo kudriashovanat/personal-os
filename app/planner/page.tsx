@@ -145,6 +145,9 @@ export default function PlannerPage() {
                 />
                 <span className={cn("flex-1 text-sm font-medium", t.status === "done" && "text-soft line-through")}>
                   {t.title}
+                  {t.due_date && t.due_date < todayISO() && t.status !== "done" && (
+                    <Badge className="ml-2 bg-peach-soft text-peach align-middle">перенесена</Badge>
+                  )}
                 </span>
                 <button
                   title="Сменить приоритет"

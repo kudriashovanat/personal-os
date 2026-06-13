@@ -14,7 +14,9 @@ export async function GET(req: NextRequest) {
   try {
     const date = req.nextUrl.searchParams.get("date");
     let q = getSupabase().from("tasks").select("*").order("priority").order("created_at");
-    if (date) q = q.or(`due_date.eq.${date},due_date.is.null`);
+    // Сегодняшний список = задачи на сегодня + без даты + ПРОСРОЧЕННЫЕ невыполненные
+    // (роллфорвард: незакрытая вчера задача переносится в сегодня; данные не мутируем).
+    if (date) q = q.or(`due_date.eq.${date},due_date.is.null,and(due_date.lt.${date},status.neq.done)`);
     const { data, error } = await q;
     if (error) throw error;
     return NextResponse.json(data);

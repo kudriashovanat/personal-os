@@ -6,7 +6,7 @@ import { TrendingUp, ExternalLink, PenLine, Loader2, Check, Archive } from "luci
 
 type Trend = {
   id: string; title: string; summary?: string; source_url?: string;
-  signal?: string; applied_idea?: string; status: string; created_at: string;
+  signal?: string; applied_idea?: string; status: string; created_at: string; drive_link?: string | null;
 };
 
 const STATUS_STYLE: Record<string, string> = {
@@ -107,6 +107,11 @@ export default function TrendsPage() {
                 {t.source_url && (
                   <a href={t.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sky hover:underline">
                     <ExternalLink size={12} /> источник
+                  </a>
+                )}
+                {t.drive_link && (
+                  <a href={t.drive_link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-iris-deep hover:underline">
+                    <ExternalLink size={12} /> Second Brain
                   </a>
                 )}
                 <div className="ml-auto flex items-center gap-1.5">

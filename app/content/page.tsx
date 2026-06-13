@@ -7,7 +7,7 @@ import { Trash2, Send, Linkedin } from "lucide-react";
 
 type Idea = {
   id: string; title: string; platform: "Telegram" | "LinkedIn";
-  topic: string | null; hook: string | null; series: string | null; status: string;
+  topic: string | null; hook: string | null; series: string | null; status: string; drive_link?: string | null;
 };
 
 const STATUSES = ["идея", "черновик", "готово", "опубликовано"];
@@ -50,6 +50,24 @@ export default function ContentPage() {
   async function remove(id: string) {
     setIdeas((prev) => (prev ?? []).filter((i) => i.id !== id));
     await fetch("/api/collection/content_ideas", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+  }
+
+  const [tgBusy, setTgBusy] = useState<string | null>(null);
+  const [tgMsg, setTgMsg] = useState<Record<string, string>>({});
+  async function toTelegram(id: string) {
+    setTgBusy(id);
+    setTgMsg((m) => ({ ...m, [id]: "" }));
+    try {
+      const r = await fetch("/api/content/telegram", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Не удалось");
+      setTgMsg((m) => ({ ...m, [id]: "Отправлено в Telegram ✓" }));
+      setIdeas((prev) => (prev ?? []).map((i) => (i.id === id ? { ...i, status: "черновик" } : i)));
+    } catch (e: any) {
+      setTgMsg((m) => ({ ...m, [id]: e.message }));
+    } finally {
+      setTgBusy(null);
+    }
   }
 
   const visible = useMemo(() => (ideas ?? []).filter((i) =>
@@ -100,19 +118,29 @@ export default function ContentPage() {
                 </span>
               </div>
               {i.hook && <p className="rounded-xl bg-white/70 px-3 py-2 text-sm italic text-ink/70">«{i.hook}»</p>}
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {i.topic && <Badge className="bg-line text-soft">{i.topic}</Badge>}
                 {i.series && <Badge className="bg-peach-soft text-peach">Серия: {i.series}</Badge>}
+                {i.drive_link && (
+                  <a href={i.drive_link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-iris-deep hover:underline">
+                    <Send size={11} /> Second Brain
+                  </a>
+                )}
               </div>
               <div className="mt-auto flex items-center gap-2 pt-1">
                 <Select value={i.status} onChange={(e) => patch(i.id, { status: e.target.value })} className="flex-1 !py-1.5 text-xs">
                   {STATUSES.map((s) => <option key={s}>{s}</option>)}
                 </Select>
                 <Badge className={STATUS_STYLE[i.status]}>{i.status}</Badge>
+                <button aria-label="В Telegram" title="Черновик поста → мне в Telegram" onClick={() => toTelegram(i.id)} disabled={tgBusy === i.id}
+                  className="rounded-full p-1.5 text-soft hover:bg-sky-soft hover:text-sky disabled:opacity-50">
+                  <Send size={14} className={tgBusy === i.id ? "animate-pulse" : ""} />
+                </button>
                 <button aria-label="Удалить" onClick={() => remove(i.id)} className="rounded-full p-1.5 text-soft/40 opacity-0 transition hover:bg-rose-soft hover:text-rose group-hover:opacity-100">
                   <Trash2 size={14} />
                 </button>
               </div>
+              {tgMsg[i.id] && <p className="text-xs text-soft">{tgMsg[i.id]}</p>}
             </Card>
           ))}
         </div>

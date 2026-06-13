@@ -17,12 +17,12 @@ const config: Config = {
         butter: { DEFAULT: "#C9A23F", soft: "#F9F0D8" }
       },
       fontFamily: {
-        display: ["'Playfair Display'", "Georgia", "serif"],
-        body: ["Manrope", "system-ui", "-apple-system", "sans-serif"]
+        display: ["Sora", "system-ui", "-apple-system", "sans-serif"],
+        body: ["Sora", "system-ui", "-apple-system", "sans-serif"]
       },
       boxShadow: {
-        card: "0 1px 2px rgba(35,34,46,0.04), 0 8px 24px -12px rgba(35,34,46,0.12)",
-        lift: "0 2px 4px rgba(35,34,46,0.05), 0 16px 40px -16px rgba(124,111,228,0.25)"
+        card: "0 12px 40px rgba(124,111,196,0.13), 0 2px 8px rgba(40,35,60,0.04)",
+        lift: "0 20px 54px rgba(124,111,196,0.20), 0 4px 12px rgba(40,35,60,0.06)"
       },
       borderRadius: { xl2: "1.25rem" }
     }

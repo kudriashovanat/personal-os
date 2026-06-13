@@ -3,7 +3,7 @@
 // часть рассчитана на внешний триггер (n8n / cron / скрипт на Mac), который пушит
 // результат в /api/agents/[id]/report. Любой отчёт — это ДАННЫЕ для показа, не команды.
 
-import { domainOf, hasSalaryDigits, TARGET_ROLES, TARGET_LEVEL, type LevelMatch } from "@/lib/career";
+import { domainOf, hasSalaryDigits, TARGET_ROLES, TARGET_LEVEL, DIMENSION_AXES, type LevelMatch } from "@/lib/career";
 
 export type AgentId =
   | "career-search"
@@ -187,6 +187,179 @@ export async function runCareerSearch(): Promise<{ items: CareerItem[]; modelTex
   return { items, modelText: text };
 }
 
+// ---------- Sprint 3: Interview Coach + Debrief ----------
+// DIMENSION_AXES — в lib/career.ts (общий клиент/сервер канон).
+
+export type InterviewPrep = {
+  likely_questions: string[];
+  story_points: string[];
+  positioning: string;
+  questions_to_ask: string[];
+};
+
+export type InterviewAnalysis = {
+  questions: string[];
+  competency_map: Record<string, string>;
+  strengths: string;
+  weaknesses: string;
+  missed_opportunities: string;
+  objections: string;
+  dimension_scores: Record<string, number>;
+  recommendations: string;
+};
+
+export type DebriefPattern = {
+  pattern: string;
+  recurring_weak_spots: string[];
+  recurring_strengths: string[];
+  fix_focus: string;
+};
+
+function vacLine(v: { title: string; company?: string | null; level?: string | null; country?: string | null }): string {
+  return `${v.title}${v.company ? ` · ${v.company}` : ""}${v.country ? ` · ${v.country}` : ""}${v.level ? ` · уровень: ${v.level}` : ""}`;
+}
+function profileBlock(p: ScoringProfile): string {
+  const roles = (p.target_roles?.length ? p.target_roles : TARGET_ROLES).join(", ");
+  return `Целевые роли: ${roles}\nЦелевой уровень: ${p.target_level || TARGET_LEVEL}\nCV (фрагмент):\n${(p.cv_text || "(CV не задан)").slice(0, 5000)}`;
+}
+const strArr = (v: any): string[] => (Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.trim()) : []);
+const asStr = (v: any): string => (typeof v === "string" ? v : "");
+
+/** Interview Coach: подготовка к раунду интервью. */
+export async function draftInterviewPrep(
+  vac: { title: string; company?: string | null; level?: string | null; country?: string | null; notes?: string | null },
+  profile: ScoringProfile,
+  roundType?: string | null,
+): Promise<{ data: InterviewPrep; modelText: string }> {
+  const prompt = `Ты — карьерный коуч. Подготовь кандидата к интервью.
+ВАКАНСИЯ: ${vacLine(vac)}${vac.notes ? `\nЗаметки: ${vac.notes}` : ""}
+РАУНД: ${roundType || "не указан"}
+КАНДИДАТ:
+${profileBlock(profile)}
+
+Узкое место №1: держать линию HRBP/People Partner, не звучать как over-qualified Director.
+Дай практичную подготовку. Верни ТОЛЬКО валидный JSON без markdown:
+{"likely_questions":["6-8 вероятных вопросов под эту роль и раунд"],"story_points":["3-5 историй/примеров из CV с цифрами под эти вопросы"],"positioning":"как держать позиционирование уровня (2-3 предложения)","questions_to_ask":["3-4 сильных вопроса кандидата интервьюеру"]}`;
+  const { text } = await callAnthropic(prompt, { model: MODEL_TIER.sonnet, maxTokens: 1800 });
+  const r = parseJsonLoose<any>(text);
+  return {
+    data: {
+      likely_questions: strArr(r?.likely_questions),
+      story_points: strArr(r?.story_points),
+      positioning: asStr(r?.positioning),
+      questions_to_ask: strArr(r?.questions_to_ask),
+    },
+    modelText: text,
+  };
+}
+
+/** Debrief одного раунда: разбор вставленного транскрипта. */
+export async function analyzeInterview(
+  transcript: string,
+  vac: { title: string; company?: string | null; level?: string | null; country?: string | null },
+  profile: ScoringProfile,
+): Promise<{ data: InterviewAnalysis; modelText: string }> {
+  const prompt = `Ты — карьерный аналитик. Разбери транскрипт интервью (вставлен кандидатом вручную).
+ВАКАНСИЯ: ${vacLine(vac)}
+КАНДИДАТ:
+${profileBlock(profile)}
+
+ТРАНСКРИПТ:
+${transcript.slice(0, 14000)}
+
+Оцени по 8 осям (1..10) РОВНО с этими названиями: ${DIMENSION_AXES.join(", ")}.
+Верни ТОЛЬКО валидный JSON без markdown:
+{"questions":["ключевые заданные вопросы"],"competency_map":{"компетенция":"как показана"},"strengths":"что сильно (2-3 предложения)","weaknesses":"что слабо","missed_opportunities":"что упущено — где можно было показать себя сильнее","objections":"вероятные возражения интервьюера","dimension_scores":{"Коммуникация":1-10, ...все 8 осей},"recommendations":"что улучшить к следующему раунду"}`;
+  const { text } = await callAnthropic(prompt, { model: MODEL_TIER.sonnet, maxTokens: 2500 });
+  const r = parseJsonLoose<any>(text);
+  const scores: Record<string, number> = {};
+  for (const ax of DIMENSION_AXES) {
+    const n = Math.round(Number(r?.dimension_scores?.[ax]));
+    if (Number.isFinite(n)) scores[ax] = Math.min(10, Math.max(1, n));
+  }
+  const cm: Record<string, string> = {};
+  if (r?.competency_map && typeof r.competency_map === "object") {
+    for (const [k, v] of Object.entries(r.competency_map)) if (typeof v === "string") cm[k] = v;
+  }
+  return {
+    data: {
+      questions: strArr(r?.questions),
+      competency_map: cm,
+      strengths: asStr(r?.strengths),
+      weaknesses: asStr(r?.weaknesses),
+      missed_opportunities: asStr(r?.missed_opportunities),
+      objections: asStr(r?.objections),
+      dimension_scores: scores,
+      recommendations: asStr(r?.recommendations),
+    },
+    modelText: text,
+  };
+}
+
+/** Debrief-паттерн: сквозной разбор через несколько раундов (главное требование брифа). */
+export async function debriefPattern(
+  analyses: { round_type?: string | null; weaknesses?: string; missed_opportunities?: string; objections?: string; dimension_scores?: Record<string, number> }[],
+): Promise<{ data: DebriefPattern; modelText: string }> {
+  const compact = analyses.map((a, i) => ({
+    round: a.round_type || `#${i + 1}`,
+    weaknesses: a.weaknesses, missed: a.missed_opportunities, objections: a.objections, scores: a.dimension_scores,
+  }));
+  const prompt = `Ты — карьерный стратег. Перед тобой разборы НЕСКОЛЬКИХ интервью одного кандидата.
+Не пересказывай каждый — найди СКВОЗНОЙ ПАТТЕРН (что повторяется из раунда в раунд).
+ДАННЫЕ: ${JSON.stringify(compact)}
+
+Верни ТОЛЬКО валидный JSON без markdown:
+{"pattern":"главный повторяющийся паттерн (например: 'стабильно проседает на вопросах про HR-аналитику')","recurring_weak_spots":["повторяющиеся слабые места"],"recurring_strengths":["повторяющиеся сильные стороны"],"fix_focus":"на чём сфокусироваться, чтобы повысить шанс оффера"}`;
+  const { text } = await callAnthropic(prompt, { model: MODEL_TIER.sonnet, maxTokens: 1500 });
+  const r = parseJsonLoose<any>(text);
+  return {
+    data: {
+      pattern: asStr(r?.pattern),
+      recurring_weak_spots: strArr(r?.recurring_weak_spots),
+      recurring_strengths: strArr(r?.recurring_strengths),
+      fix_focus: asStr(r?.fix_focus),
+    },
+    modelText: text,
+  };
+}
+
+/** Генерация документа отклика: cover letter или сообщение рекрутеру (Sonnet). */
+export type DocKind = "cover" | "recruiter";
+
+export async function draftDocument(
+  kind: DocKind,
+  vac: { title: string; company?: string | null; level?: string | null; notes?: string | null; country?: string | null },
+  profile: ScoringProfile,
+): Promise<{ text: string }> {
+  const targetRoles = (profile.target_roles?.length ? profile.target_roles : TARGET_ROLES).join(", ");
+  const targetLevel = profile.target_level || TARGET_LEVEL;
+  const cv = (profile.cv_text || "").slice(0, 6000);
+
+  const shared = `КАНДИДАТ:
+Целевые роли: ${targetRoles}
+Целевой уровень: ${targetLevel}
+CV (фрагмент):
+${cv || "(CV не задан)"}
+
+ВАКАНСИЯ:
+${vac.title}${vac.company ? ` · ${vac.company}` : ""}${vac.country ? ` · ${vac.country}` : ""}${vac.level ? ` · уровень: ${vac.level}` : ""}
+${vac.notes ? `Заметки: ${vac.notes}` : ""}
+
+ВАЖНО (узкое место №1): позиционировать как HRBP/People Partner, НЕ как Director. Не звучать over-qualified. Опираться на конкретику из CV (цифры, достижения).`;
+
+  const prompt =
+    kind === "cover"
+      ? `Напиши cover letter под вакансию на английском.
+${shared}
+Требования: ≤ 180 слов, тёплый профессиональный тон, 2 коротких абзаца, конкретная привязка к роли и компании, 1–2 факта из CV с цифрами. Без клише «I am writing to apply». Верни ТОЛЬКО текст письма.`
+      : `Напиши короткое сообщение рекрутеру (LinkedIn outreach / note) под вакансию на английском.
+${shared}
+Требования: ≤ 90 слов, тёплый человеческий тон, без формальностей, одна фраза о релевантности с цифрой из CV, мягкий призыв обсудить роль. Верни ТОЛЬКО текст сообщения.`;
+
+  const { text } = await callAnthropic(prompt, { model: MODEL_TIER.sonnet, maxTokens: 700 });
+  return { text: text.trim() };
+}
+
 /** Positioning Calibrator: как вакансия читается под профиль ДО отклика. */
 export type Calibration = {
   reads_as: string;          // как роль воспринимает рекрутер для этого кандидата
@@ -240,6 +413,65 @@ ${vac.notes ? `Заметки: ${vac.notes}` : ""}
     title_framing: str(r?.title_framing),
   };
   return { data, modelText: text };
+}
+
+/** Разворачивает идею контента в готовый черновик поста (Sonnet, голос автора). */
+export async function draftPost(idea: { title: string; platform?: string | null; topic?: string | null; hook?: string | null }): Promise<{ text: string }> {
+  const platform = idea.platform || "Telegram";
+  const prompt = `Ты — контент-стратег HR-эксперта (тёплый, исследующий голос, личный опыт, без назидательности; пишешь на русском).
+Разверни идею в готовый черновик поста для ${platform}.
+Идея: ${idea.title}${idea.topic ? `\nТема: ${idea.topic}` : ""}${idea.hook ? `\nЗацепка: ${idea.hook}` : ""}
+${platform === "LinkedIn" ? "Формат LinkedIn: профессиональный, абзацами, до ~1200 знаков." : "Формат Telegram: личный и живой, короткие абзацы, до ~800 знаков."}
+Верни ТОЛЬКО текст поста — без пояснений и markdown-заголовков.`;
+  const { text } = await callAnthropic(prompt, { model: MODEL_TIER.sonnet, maxTokens: 900 });
+  return { text: text.trim() };
+}
+
+/** Краткое содержание текста файла (Haiku — дёшево). Пусто, если нечего суммировать. */
+export async function summarizeText(text: string, name: string): Promise<string> {
+  const t = (text || "").trim();
+  if (t.length < 40) return "";
+  const prompt = `Сделай краткое содержание документа «${name}» на русском: 3–5 предложений, суть и ключевые пункты. Без вступлений и markdown.
+
+ТЕКСТ:
+${t.slice(0, 14000)}`;
+  const { text: out } = await callAnthropic(prompt, { model: MODEL_TIER.haiku, maxTokens: 600 });
+  return out.trim();
+}
+
+/** Классификатор отказов: ранжированная причина + позиционный вывод (Haiku). */
+export type RejectionReason = { reason: string; likelihood: "high" | "medium" | "low"; note: string };
+export type RejectionClassification = { reasons: RejectionReason[]; positioning_verdict: string; summary: string };
+
+export async function classifyRejection(
+  rawText: string,
+  vac: { title: string; company?: string | null; level?: string | null },
+  profile: ScoringProfile,
+): Promise<{ data: RejectionClassification; modelText: string }> {
+  const targetLevel = profile.target_level || TARGET_LEVEL;
+  const prompt = `Ты — карьерный аналитик. Классифицируй причину отказа по вакансии.
+ВАКАНСИЯ: ${vac.title}${vac.company ? ` · ${vac.company}` : ""}${vac.level ? ` · уровень: ${vac.level}` : ""}
+ЦЕЛЕВОЙ УРОВЕНЬ КАНДИДАТА: ${targetLevel}
+ТЕКСТ ОТКАЗА (или контекст, вставлен вручную):
+${rawText.slice(0, 6000)}
+
+Узкое место №1: кандидата с титулом «HR Director» часто режут как «дорого / выше роли / solo-operator».
+Дай РАНЖИРОВАННЫЙ список вероятных причин (от самой вероятной), НЕ плоский — у каждой likelihood и пояснение.
+Отдельно дай позиционный вывод: что в позиционировании привело к отказу и как это исправить.
+
+Верни ТОЛЬКО валидный JSON без markdown:
+{"reasons":[{"reason":"...","likelihood":"high|medium|low","note":"почему именно эта причина"}],"positioning_verdict":"позиционный вывод (напр. 'читаешься как Director, а не HRBP — снизь уровень в резюме')","summary":"1 предложение — главное"}`;
+
+  const { text } = await callAnthropic(prompt, { model: MODEL_TIER.haiku, maxTokens: 1500 });
+  const r = parseJsonLoose<any>(text);
+  const lk = (v: any): RejectionReason["likelihood"] => (v === "high" || v === "medium" || v === "low" ? v : "medium");
+  const reasons: RejectionReason[] = Array.isArray(r?.reasons)
+    ? r.reasons.filter((x: any) => x && typeof x.reason === "string").map((x: any) => ({ reason: x.reason, likelihood: lk(x.likelihood), note: typeof x.note === "string" ? x.note : "" }))
+    : [];
+  return {
+    data: { reasons, positioning_verdict: typeof r?.positioning_verdict === "string" ? r.positioning_verdict : "", summary: typeof r?.summary === "string" ? r.summary : "" },
+    modelText: text,
+  };
 }
 
 /** Follow-up: короткий вежливый нудж по остывшей заявке (Sonnet — это outreach). */

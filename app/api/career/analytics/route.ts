@@ -15,7 +15,7 @@ export async function GET() {
   try {
     const { data: items, error: e1 } = await sb
       .from("career_items")
-      .select("id, title, company, status, level_match, fit_score, country, source, created_at");
+      .select("id, title, company, status, level_match, fit_score, country, source, created_at, next_action, next_action_date");
     if (e1) throw e1;
 
     let history: HistoryRow[] = [];

@@ -14,6 +14,8 @@ export type ItemRow = {
   country?: string | null;
   source?: string | null;
   created_at?: string | null;
+  next_action?: string | null;
+  next_action_date?: string | null;
 };
 
 export type HistoryRow = {
@@ -46,6 +48,15 @@ export type ColdApp = {
   agingDays: number;
 };
 
+export type ActionDue = {
+  id: string;
+  title: string;
+  company: string | null;
+  action: string;
+  date: string;
+  overdue: boolean;
+};
+
 export type Analytics = {
   totals: { found: number; applied: number; active: number };
   appsPerDay: { today: number; last7Avg: number; target: number; series: { date: string; count: number }[] };
@@ -53,6 +64,7 @@ export type Analytics = {
   positioning: { at: number; below: number; above: number; unknown: number; overLevelingPct: number | null };
   fit: { appliedAvg: number | null; allAvg: number | null; disciplinePct: number | null };
   cold: ColdApp[];
+  actionsDue: ActionDue[];
   confidence: { applied: number; responded: number; enoughForConversion: boolean };
 };
 
@@ -150,6 +162,20 @@ export function computeAnalytics(items: ItemRow[], history: HistoryRow[], opts: 
     .filter((c) => c.agingDays >= coldDays)
     .sort((a, b) => b.agingDays - a.agingDays);
 
+  // --- Дайджест «сделать»: next_action с датой на сегодня/просрочено ---
+  const todayStr = new Date(now).toISOString().slice(0, 10);
+  const actionsDue: ActionDue[] = items
+    .filter((it) => it.next_action_date && it.next_action_date.slice(0, 10) <= todayStr && !["Отказ", "Архив"].includes(normalizeStatus(it.status)))
+    .map((it) => ({
+      id: it.id,
+      title: it.title ?? "Без названия",
+      company: it.company ?? null,
+      action: it.next_action ?? "",
+      date: it.next_action_date!.slice(0, 10),
+      overdue: it.next_action_date!.slice(0, 10) < todayStr,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
   // --- Достаточность данных для конверсий ---
   const respondedItems = items.filter((it) => maxStageIdx(it) > APPLIED_IDX).length; // прошли дальше отклика
 
@@ -160,6 +186,7 @@ export function computeAnalytics(items: ItemRow[], history: HistoryRow[], opts: 
     positioning: { ...pos, overLevelingPct },
     fit: { appliedAvg: avg(appliedScores), allAvg: avg(allScores), disciplinePct },
     cold,
+    actionsDue,
     confidence: { applied, responded: respondedItems, enoughForConversion: applied >= conversionMinN },
   };
 }

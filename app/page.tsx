@@ -15,6 +15,7 @@ export default function TodayPage() {
   const { data: session } = useSession();
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [events, setEvents] = useState<CalEvent[] | null>(null);
+  const [ideasCount, setIdeasCount] = useState<number | null>(null);
   const [calError, setCalError] = useState(false);
 
   useEffect(() => {
@@ -26,7 +27,18 @@ export default function TodayPage() {
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then(setEvents)
       .catch(() => { setEvents([]); setCalError(true); });
+    fetch("/api/collection/content_ideas")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setIdeasCount(Array.isArray(d) ? d.filter((i: any) => i.status === "идея" || i.status === "черновик").length : 0))
+      .catch(() => setIdeasCount(0));
   }, []);
+
+  function plural(n: number, one: string, few: string, many: string) {
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+    return many;
+  }
 
   const done = tasks?.filter((t) => t.status === "done").length ?? 0;
   const total = tasks?.length ?? 0;
@@ -61,9 +73,16 @@ export default function TodayPage() {
         className="px-1 pb-8 pt-6 lg:pt-2"
       >
         <div className="eyebrow">{ruDate()}</div>
-        <h1 className="mt-2 font-display text-4xl font-semibold leading-tight tracking-tight lg:text-5xl">
+        <h1 className="mt-2 font-display text-4xl font-light leading-tight tracking-tight lg:text-5xl">
           {greeting(session?.user?.name)}
         </h1>
+        {tasks !== null && (
+          <p className="mt-3 text-sm font-light text-soft">
+            у тебя {total} {plural(total, "задача", "задачи", "задач")}
+            {(events ?? []).length > 0 && `, ${(events ?? []).length} ${plural((events ?? []).length, "событие", "события", "событий")}`}
+            {ideasCount != null && ideasCount > 0 && ` и ${ideasCount} ${plural(ideasCount, "идея", "идеи", "идей")} для контента`}
+          </p>
+        )}
         <div className="mt-4 flex items-start gap-2.5">
           <Sparkles size={18} className="mt-1 shrink-0 text-iris" />
           {focus ? (

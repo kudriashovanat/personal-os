@@ -4,12 +4,18 @@ import { authOptions } from "@/lib/auth";
 import { getAgent, runHrTrends, runContentIdeas, runCareerSearch, scoreVacancies, anthropicConfigured } from "@/lib/agents";
 import { getSupabase } from "@/lib/supabase";
 import { DEFAULT_NEW_STATUS } from "@/lib/career";
+import { projectToSecondBrain, trendMarkdown, contentIdeaMarkdown } from "@/lib/secondbrain";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  if (!(await getServerSession(authOptions))) return NextResponse.json({ error: "Нет доступа" }, { status: 401 });
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Нет доступа" }, { status: 401 });
+  // Токен сессии нужен для проекции артефактов в Drive (план знаний). На ручном
+  // запуске с дашборда он есть; на автономном пути (webhook) — нет, тогда пишем
+  // только в Supabase (решение по Drive-доступу: пока без серверного refresh-токена).
+  const accessToken = (session as any).accessToken as string | undefined;
   const agent = getAgent(params.id);
   if (!agent) return NextResponse.json({ error: "Агент не найден" }, { status: 404 });
   if (!agent.runnable) return NextResponse.json({ error: "Этот агент запускается извне (n8n / cron / скрипт)" }, { status: 400 });
@@ -31,16 +37,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const { items } = await runHrTrends();
       // Пишем тренды (не дублируем по заголовку за последние 30 дней — простая защита)
       let added = 0;
+      let projected = 0;
       for (const it of items) {
         try {
-          await sb.from("trends").insert({
+          const { data: row } = await sb.from("trends").insert({
             title: it.title, summary: it.summary, source_url: it.source_url ?? null,
             signal: it.signal ?? null, applied_idea: it.applied_idea ?? null, status: "новое",
-          });
+          }).select("id").single();
           added++;
+          // Проекция в Second Brain (Drive). Best-effort: без токена/папки — пропуск.
+          try {
+            const { fileName, body } = trendMarkdown(it);
+            const ref = await projectToSecondBrain(accessToken, "hr-trends", fileName, body);
+            if (ref && row?.id) { await sb.from("trends").update(ref).eq("id", row.id); projected++; }
+          } catch { /* проекция не критична */ }
         } catch { /* пропускаем сбойную вставку */ }
       }
-      summary = `Найдено сигналов: ${items.length}, добавлено: ${added}`;
+      summary = `Найдено сигналов: ${items.length}, добавлено: ${added}${projected ? `, в Second Brain: ${projected}` : ""}`;
       report = { items };
     } else if (agent.id === "career-search") {
       const { items } = await runCareerSearch();
@@ -103,16 +116,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       } catch { /* без контекста */ }
       const { items } = await runContentIdeas({ trends });
       let added = 0;
+      let projected = 0;
       for (const it of items) {
         try {
-          await sb.from("content_ideas").insert({
+          const { data: row } = await sb.from("content_ideas").insert({
             title: it.title, platform: it.platform === "LinkedIn" ? "LinkedIn" : "Telegram",
             topic: it.topic ?? null, hook: it.hook ?? null, status: "идея",
-          });
+          }).select("id").single();
           added++;
+          try {
+            const { fileName, body } = contentIdeaMarkdown(it);
+            const ref = await projectToSecondBrain(accessToken, "content-ideas", fileName, body);
+            if (ref && row?.id) { await sb.from("content_ideas").update(ref).eq("id", row.id); projected++; }
+          } catch { /* проекция не критична */ }
         } catch { /* пропуск */ }
       }
-      summary = `Сгенерировано идей: ${items.length}, добавлено в Контент-студию: ${added}`;
+      summary = `Сгенерировано идей: ${items.length}, добавлено: ${added}${projected ? `, в Second Brain: ${projected}` : ""}`;
       report = { items };
     }
 

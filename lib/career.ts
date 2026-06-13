@@ -52,6 +52,18 @@ export const TARGET_LEVEL =
 
 export type LevelMatch = "below" | "at" | "above";
 
+/** 8 осей оценки интервью (канон — в коде, общий для агента и UI). */
+export const DIMENSION_AXES = [
+  "Коммуникация", "HR-экспертиза", "Бизнес-партнёрство", "Стратегическое мышление",
+  "Аналитика и метрики", "Культурное соответствие", "Лидерство", "Позиционирование уровня",
+] as const;
+
+/** Канонические типы раундов интервью. */
+export const ROUND_TYPES = ["recruiter", "manager", "ceo", "hrd", "final", "other"] as const;
+export const ROUND_LABEL: Record<string, string> = {
+  recruiter: "Рекрутер", manager: "Менеджер", ceo: "CEO", hrd: "HRD", final: "Финал", other: "Другое",
+};
+
 // ---------- Хелперы ----------
 
 /** Домен из ссылки (source). null, если ссылка пустая/битая. */
