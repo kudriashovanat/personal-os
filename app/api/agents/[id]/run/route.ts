@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getAgent, runHrTrends, runContentIdeas, anthropicConfigured } from "@/lib/agents";
+import { getAgent, runHrTrends, runContentIdeas, runCareerSearch, anthropicConfigured } from "@/lib/agents";
 import { getSupabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +40,27 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         } catch { /* пропускаем сбойную вставку */ }
       }
       summary = `Найдено сигналов: ${items.length}, добавлено: ${added}`;
+      report = { items };
+    } else if (agent.id === "career-search") {
+      const { items } = await runCareerSearch();
+      let added = 0;
+      for (const it of items) {
+        try {
+          await sb.from("career_items").insert({
+            title: it.title,
+            company: it.company ?? null,
+            link: it.link ?? null,
+            country: it.country ?? null,
+            remote: it.remote ?? false,
+            level: it.level ?? null,
+            language: it.language ?? null,
+            notes: it.notes ?? null,
+            status: "посмотреть",
+          });
+          added++;
+        } catch { /* пропускаем сбойную вставку */ }
+      }
+      summary = `Найдено вакансий: ${items.length}, добавлено в Карьеру: ${added}`;
       report = { items };
     } else if (agent.id === "content-ideas") {
       // Контекст: свежие тренды

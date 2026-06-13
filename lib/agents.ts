@@ -25,7 +25,7 @@ export type AgentDef = {
 export const AGENTS: AgentDef[] = [
   { id: "hr-trends", name: "HR Trends", desc: "Ищет свежие сигналы HR-рынка и исследования, складывает в раздел «HR-тренды»", runnable: true, via: "anthropic" },
   { id: "content-ideas", name: "Content Ideas", desc: "Предлагает идеи постов для Telegram и LinkedIn на основе ваших трендов и заметок", runnable: true, via: "anthropic" },
-  { id: "career-search", name: "Career Search", desc: "Ищет релевантные вакансии и пишет карточки в раздел «Карьера»", runnable: false, via: "external" },
+  { id: "career-search", name: "Career Search", desc: "Ищет релевантные вакансии и пишет карточки в раздел «Карьера»", runnable: true, via: "anthropic" },
   { id: "calendar-assistant", name: "Calendar Assistant", desc: "Готовит pending-события (добавление в календарь — только после подтверждения)", runnable: false, via: "external" },
   { id: "telegram-sources", name: "Telegram Sources", desc: "Сохраняет материалы из Telegram-каналов в Drive · Telegram Sources", runnable: false, via: "external" },
   { id: "personal-digest", name: "Personal Digest", desc: "Утренний дайджест: задачи, события, свежие сигналы одним сообщением", runnable: false, via: "external" },
@@ -102,6 +102,7 @@ export function parseJsonLoose<T = any>(text: string): T {
 
 export type TrendItem = { title: string; summary: string; source_url?: string; signal?: string; applied_idea?: string };
 export type ContentIdeaItem = { title: string; platform: "Telegram" | "LinkedIn"; topic?: string; hook?: string };
+export type CareerItem = { title: string; company?: string; link?: string; country?: string; remote?: boolean; level?: string; language?: string; notes?: string };
 
 /** HR Trends: ищет в вебе свежие HR-сигналы (фокус — рынок Израиля и distributed/IT/HR). */
 export async function runHrTrends(): Promise<{ items: TrendItem[]; modelText: string }> {
@@ -129,4 +130,26 @@ ${ctx ? "Контекст:\n" + ctx + "\n\n" : ""}Предложи 5 идей п
   const { text } = await callAnthropic(prompt, { maxTokens: 2000 });
   const items = parseJsonLoose<ContentIdeaItem[]>(text);
   return { items: Array.isArray(items) ? items.slice(0, 8) : [], modelText: text };
+}
+
+
+/** Career Search: ищет релевантные HR-вакансии для Натальи. */
+export async function runCareerSearch(): Promise<{ items: CareerItem[]; modelText: string }> {
+  const prompt = `Ты — карьерный агент для русскоязычного HR-директора/HRBP, живущей в Израиле.
+Найди в интернете 8 актуальных вакансий за последние недели.
+
+Фокус поиска:
+- HR Business Partner, HR Manager, Talent Acquisition Partner, People Partner, HR Generalist
+- Израиль, Кипр, remote, EMEA
+- русскоязычные или международные компании, где можно работать на английском
+- желательно без обязательного иврита или с минимальным ивритом
+- подойдут роли уровня junior/mid/senior, если это вход на рынок Израиля
+
+Для каждой вакансии нужен реальный источник со ссылкой.
+Верни ТОЛЬКО валидный JSON-массив без markdown:
+[{"title":"...","company":"...","link":"https://...","country":"Israel|Cyprus|Remote|...","remote":true,"level":"...","language":"English/Russian/Hebrew","notes":"почему подходит"}]`;
+
+  const { text } = await callAnthropic(prompt, { webSearch: true, maxTokens: 3500 });
+  const items = parseJsonLoose<CareerItem[]>(text);
+  return { items: Array.isArray(items) ? items.slice(0, 12) : [], modelText: text };
 }
