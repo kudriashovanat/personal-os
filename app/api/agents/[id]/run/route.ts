@@ -7,7 +7,12 @@ import { DEFAULT_NEW_STATUS } from "@/lib/career";
 import { projectToSecondBrain, trendMarkdown, contentIdeaMarkdown } from "@/lib/secondbrain";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 60; // в пределах лимита Vercel; career-search сокращён под этот бюджет
+
+// Поэтапное логирование (видно в Vercel logs) — чтобы понимать, где уходит время.
+function log(agent: string, stage: string, since?: number) {
+  console.log(`[${agent}] ${stage}${since ? ` +${Date.now() - since}ms` : ""}`);
+}
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -56,32 +61,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       summary = `Найдено сигналов: ${items.length}, добавлено: ${added}${projected ? `, в Second Brain: ${projected}` : ""}`;
       report = { items };
     } else if (agent.id === "career-search") {
+      // ТОЛЬКО поиск + сохранение. Скоринг вынесен в отдельного агента career-score,
+      // чтобы один запрос гарантированно укладывался в лимит времени Vercel.
+      const t0 = Date.now();
+      log("career-search", "search started");
       const { items } = await runCareerSearch();
-
-      // Профиль для скоринга. Зависимость из брифа: без cv_text fit_score = вода —
-      // тогда пишем вакансии без оценки (скоринг пропускаем).
-      let profile: any = null;
-      try {
-        const { data } = await sb.from("profile").select("cv_text, target_roles, target_level").limit(1).maybeSingle();
-        profile = data ?? null;
-      } catch { /* таблицы profile ещё нет — без скоринга */ }
-
-      let scores: (any | null)[] = items.map(() => null);
-      let scored = false;
-      if (profile?.cv_text) {
-        try {
-          const res = await scoreVacancies(items, profile);
-          scores = res.scores;
-          scored = true;
-        } catch { /* скоринг недоступен — пишем без оценки */ }
-      }
+      log("career-search", `search completed (${items.length} вакансий)`, t0);
 
       let added = 0;
-      for (let i = 0; i < items.length; i++) {
-        const it = items[i];
-        const s = scores[i];
+      const tSave = Date.now();
+      for (const it of items) {
         try {
           // career_status_history пишется триггером БД на INSERT — руками не дублируем.
+          // Поля скоринга остаются null до прогона Career Scoring.
           await sb.from("career_items").insert({
             title: it.title,
             company: it.company ?? null,
@@ -93,20 +85,57 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             notes: it.notes ?? null,
             source: it.source ?? null,
             status: DEFAULT_NEW_STATUS,
-            // Поля скоринга (если был профиль) — иначе остаются null.
-            fit_score: s?.fit_score ?? null,
-            fit_reason: s?.fit_reason ?? null,
-            fit_risks: s?.fit_risks ?? null,
-            to_strengthen: s?.to_strengthen ?? null,
-            level_match: s?.level_match ?? null,
-            salary: s?.salary ?? null,
-            next_action: s?.next_action ?? null,
           });
           added++;
         } catch { /* пропускаем сбойную вставку */ }
       }
-      summary = `Найдено вакансий: ${items.length}, добавлено: ${added}${scored ? ", со скорингом" : " (без скоринга — нет профиля)"}`;
-      report = { items, scored };
+      log("career-search", `save completed (${added})`, tSave);
+      summary = `Найдено вакансий: ${items.length}, добавлено: ${added}. Запустите «Career Scoring» для fit_score.`;
+      report = { items, scored: false };
+    } else if (agent.id === "career-score") {
+      // Фоновый скоринг: берём пачку невыставленных вакансий и считаем батчами по 5.
+      const t0 = Date.now();
+      const { data: profile } = await sb.from("profile").select("cv_text, target_roles, target_level").limit(1).maybeSingle();
+      if (!profile?.cv_text) {
+        const m = "Нет cv_text в профиле — заполните /профиль, иначе fit_score = вода.";
+        if (runId) { try { await sb.from("agent_runs").update({ status: "error", error: m, finished_at: new Date().toISOString() }).eq("id", runId); } catch {} }
+        return NextResponse.json({ error: m }, { status: 412 });
+      }
+      const { data: pending } = await sb
+        .from("career_items")
+        .select("id, title, company, link, country, remote, level, language, notes, source")
+        .is("fit_score", null)
+        .order("date_found", { ascending: false })
+        .limit(15);
+
+      const list = (pending ?? []) as any[];
+      log("career-score", `scoring started (${list.length} в очереди)`, t0);
+
+      let scoredCount = 0;
+      for (let b = 0; b < list.length; b += 5) {
+        const batch = list.slice(b, b + 5);
+        try {
+          const { scores } = await scoreVacancies(batch, profile);
+          for (let i = 0; i < batch.length; i++) {
+            const s = scores[i];
+            if (!s) continue;
+            try {
+              await sb.from("career_items").update({
+                fit_score: s.fit_score, fit_reason: s.fit_reason, fit_risks: s.fit_risks,
+                to_strengthen: s.to_strengthen, level_match: s.level_match,
+                salary: s.salary, next_action: s.next_action,
+              }).eq("id", batch[i].id);
+              scoredCount++;
+            } catch { /* пропуск строки */ }
+          }
+          log("career-score", `batch ${b / 5 + 1} completed`, t0);
+        } catch (err: any) {
+          log("career-score", `batch ${b / 5 + 1} failed: ${(err?.message || "").slice(0, 60)}`, t0);
+        }
+      }
+      const left = Math.max(0, list.length - scoredCount);
+      summary = `Оценено вакансий: ${scoredCount}${left ? `, осталось в очереди: ${left} — запустите ещё раз` : ""}`;
+      report = { scored: scoredCount, queued: list.length };
     } else if (agent.id === "content-ideas") {
       // Контекст: свежие тренды
       let trends: any[] = [];

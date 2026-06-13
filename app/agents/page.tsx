@@ -37,12 +37,23 @@ export default function AgentsPage() {
     setRunning(id); setMsg(null);
     try {
       const r = await fetch(`/api/agents/${id}/run`, { method: "POST" });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error);
+      // Безопасный разбор: ответ может быть не JSON (таймаут/ошибка платформы Vercel).
+      const raw = await r.text();
+      let data: any = null;
+      try { data = raw ? JSON.parse(raw) : null; } catch { /* не JSON */ }
+
+      if (!r.ok || !data) {
+        const timeout = r.status === 504 || /timeout|FUNCTION_INVOCATION|An error occ/i.test(raw);
+        const text = data?.error
+          || (timeout
+            ? "Агент не успел за лимит времени. Попробуйте ещё раз — поиск уже сокращён."
+            : (raw || `Ошибка ${r.status}`).replace(/<[^>]*>/g, "").trim().slice(0, 200));
+        throw new Error(text);
+      }
       setMsg({ id, text: data.summary || "Готово", ok: true });
       load();
     } catch (e: any) {
-      setMsg({ id, text: e.message, ok: false });
+      setMsg({ id, text: e.message || "Не удалось запустить агента", ok: false });
     } finally {
       setRunning(null);
     }

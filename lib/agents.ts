@@ -7,6 +7,7 @@ import { domainOf, hasSalaryDigits, TARGET_ROLES, TARGET_LEVEL, DIMENSION_AXES, 
 
 export type AgentId =
   | "career-search"
+  | "career-score"
   | "hr-trends"
   | "content-ideas"
   | "calendar-assistant"
@@ -27,7 +28,8 @@ export type AgentDef = {
 export const AGENTS: AgentDef[] = [
   { id: "hr-trends", name: "HR Trends", desc: "Ищет свежие сигналы HR-рынка и исследования, складывает в раздел «HR-тренды»", runnable: true, via: "anthropic" },
   { id: "content-ideas", name: "Content Ideas", desc: "Предлагает идеи постов для Telegram и LinkedIn на основе ваших трендов и заметок", runnable: true, via: "anthropic" },
-  { id: "career-search", name: "Career Search", desc: "Ищет релевантные вакансии и пишет карточки в раздел «Карьера»", runnable: true, via: "anthropic" },
+  { id: "career-search", name: "Career Search", desc: "Ищет релевантные вакансии и пишет карточки в раздел «Карьера» (без скоринга — быстро)", runnable: true, via: "anthropic" },
+  { id: "career-score", name: "Career Scoring", desc: "Досчитывает fit_score и позиционирование для новых вакансий (батчами)", runnable: true, via: "anthropic" },
   { id: "calendar-assistant", name: "Calendar Assistant", desc: "Готовит pending-события (добавление в календарь — только после подтверждения)", runnable: false, via: "external" },
   { id: "telegram-sources", name: "Telegram Sources", desc: "Сохраняет материалы из Telegram-каналов в Drive · Telegram Sources", runnable: false, via: "external" },
   { id: "personal-digest", name: "Personal Digest", desc: "Утренний дайджест: задачи, события, свежие сигналы одним сообщением", runnable: false, via: "external" },
@@ -56,7 +58,7 @@ export const MODEL_TIER = {
 } as const;
 
 /** Вызов Anthropic API. webSearch=true подключает серверный инструмент web_search. */
-async function callAnthropic(prompt: string, opts: { webSearch?: boolean; maxTokens?: number; model?: string } = {}): Promise<AnthropicResult> {
+async function callAnthropic(prompt: string, opts: { webSearch?: boolean; maxTokens?: number; model?: string; maxUses?: number } = {}): Promise<AnthropicResult> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error("ANTHROPIC_API_KEY не задан — добавьте ключ в .env, чтобы агенты работали на сервере");
   const model = opts.model || MODEL_TIER.sonnet;
@@ -67,7 +69,7 @@ async function callAnthropic(prompt: string, opts: { webSearch?: boolean; maxTok
     messages: [{ role: "user", content: prompt }],
   };
   if (opts.webSearch) {
-    body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }];
+    body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: opts.maxUses ?? 5 }];
   }
 
   const res = await fetch(ANTHROPIC_URL, {
@@ -164,7 +166,7 @@ ${ctx ? "Контекст:\n" + ctx + "\n\n" : ""}Предложи 5 идей п
 /** Career Search: ищет релевантные HR-вакансии для Натальи. */
 export async function runCareerSearch(): Promise<{ items: CareerItem[]; modelText: string }> {
   const prompt = `Ты — карьерный агент для русскоязычного HR-специалиста (бывш. HR Director, 10+ лет), живущей в Израиле.
-Найди в интернете как можно больше актуальных вакансий за последние недели — цель около 30 штук.
+Найди в интернете актуальные вакансии за последние недели — цель 10–15 штук.
 
 Фокус поиска:
 - HR Business Partner, People Partner, HR Manager, Talent Acquisition Partner, HR Generalist
@@ -174,13 +176,14 @@ export async function runCareerSearch(): Promise<{ items: CareerItem[]; modelTex
 - уровень mid/senior IC; Director/VP-вакансии НЕ приоритет (нереалистичны на этом рынке)
 
 Для каждой вакансии нужен реальный источник со ссылкой.
-Верни ТОЛЬКО валидный JSON-массив без markdown (до ~30 объектов):
+Верни ТОЛЬКО валидный JSON-массив без markdown (до ~15 объектов):
 [{"title":"...","company":"...","link":"https://...","country":"Israel|Cyprus|Remote|...","remote":true,"level":"...","language":"English/Russian/Hebrew","notes":"почему подходит"}]`;
 
-  const { text } = await callAnthropic(prompt, { webSearch: true, maxTokens: 8000 });
+  // Сокращено для прод-бюджета времени Vercel: меньше вакансий, меньше web-search, меньше токенов.
+  const { text } = await callAnthropic(prompt, { webSearch: true, maxTokens: 5000, maxUses: 3 });
   const raw = parseJsonLoose<CareerItem[]>(text);
   // source = домен из link (не полагаемся на модель — выводим сами).
-  const items = (Array.isArray(raw) ? raw : []).slice(0, 30).map((it) => ({
+  const items = (Array.isArray(raw) ? raw : []).slice(0, 15).map((it) => ({
     ...it,
     source: domainOf(it.link),
   }));
@@ -597,7 +600,7 @@ ${JSON.stringify(list)}
 Верни ТОЛЬКО валидный JSON-массив без markdown, по одному объекту на вакансию, с тем же idx:
 [{"idx":0,"fit_score":1-10,"fit_reason":"...","fit_risks":"...","to_strengthen":"...","level_match":"below|at|above","salary":"строка или null","next_action":"..."}]`;
 
-  const { text } = await callAnthropic(prompt, { model: MODEL_TIER.haiku, maxTokens: 8000 });
+  const { text } = await callAnthropic(prompt, { model: MODEL_TIER.haiku, maxTokens: 4000 });
   const parsed = parseJsonLoose<any[]>(text);
   const byIdx = new Map<number, any>();
   if (Array.isArray(parsed)) {
