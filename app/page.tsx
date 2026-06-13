@@ -6,7 +6,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, CalendarDays, Sparkles } from "lucide-react";
 import { Card, Progress, Badge, Empty } from "@/components/ui";
-import { ruDate, greeting, todayISO, CATEGORY_STYLE, type Category } from "@/lib/utils";
+import { ruDate, greeting, todayISO, CATEGORY_STYLE, cn, type Category } from "@/lib/utils";
 
 type Task = { id: string; title: string; category: Category; priority: number; status: string };
 type CalEvent = { id: string; title: string; start: string; end: string; allDay: boolean; location: string | null };
@@ -16,6 +16,7 @@ export default function TodayPage() {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [events, setEvents] = useState<CalEvent[] | null>(null);
   const [ideasCount, setIdeasCount] = useState<number | null>(null);
+  const [wotd, setWotd] = useState<{ en: any; he: any } | null>(null);
   const [calError, setCalError] = useState(false);
 
   useEffect(() => {
@@ -31,6 +32,10 @@ export default function TodayPage() {
       .then((r) => (r.ok ? r.json() : []))
       .then((d) => setIdeasCount(Array.isArray(d) ? d.filter((i: any) => i.status === "идея" || i.status === "черновик").length : 0))
       .catch(() => setIdeasCount(0));
+    fetch("/api/learning?wotd=1")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setWotd(d && !d.error ? d : null))
+      .catch(() => setWotd(null));
   }, []);
 
   function plural(n: number, one: string, few: string, many: string) {
@@ -162,6 +167,38 @@ export default function TodayPage() {
           </Card>
         </div>
       </div>
+
+      {(wotd?.en || wotd?.he) && (
+        <div className="mt-4">
+          <div className="eyebrow mb-2">Слова дня</div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {wotd?.en && <WordCard item={wotd.en} label="English" />}
+            {wotd?.he && <WordCard item={wotd.he} label="עברית" rtl />}
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function WordCard({ item, label, rtl }: { item: any; label: string; rtl?: boolean }) {
+  const [show, setShow] = useState(false);
+  return (
+    <Card>
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="eyebrow">{label}</span>
+        <Link href="/learning" className="text-xs font-semibold text-iris hover:text-iris-deep">все →</Link>
+      </div>
+      <div className={cn("font-display text-2xl font-medium leading-snug", rtl && "text-right [direction:rtl]")}>{item.term}</div>
+      {show ? (
+        <div className="mt-2">
+          {item.transliteration && <div className="text-sm text-soft">[{item.transliteration}]</div>}
+          <div className="text-base">{item.translation}</div>
+          {item.example && <div className={cn("mt-1 text-xs italic text-soft", rtl && "text-right [direction:rtl]")}>{item.example}</div>}
+        </div>
+      ) : (
+        <button onClick={() => setShow(true)} className="mt-2 text-sm font-semibold text-iris hover:text-iris-deep">Показать перевод</button>
+      )}
+    </Card>
   );
 }

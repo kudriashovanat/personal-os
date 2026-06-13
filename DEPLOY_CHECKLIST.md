@@ -16,6 +16,7 @@ npm install
 - [ ] `supabase/migrations/0001_career_crm.sql` — Career CRM: расширение `career_items`, новый CHECK на `status`, таблицы `profile` / `career_status_history` / `interviews` / `interview_analyses` / `rejections`, триггер истории статусов.
 - [ ] `supabase/migrations/0002_second_brain.sql` — указатели `drive_id` / `drive_link` в `trends` и `content_ideas`.
 - [ ] `supabase/migrations/0003_uploads.sql` — таблица `uploads` (индекс загруженных файлов).
+- [ ] `supabase/migrations/0004_learning.sql` — таблица `learning_items` (карточки English/Hebrew с SRS).
 
 ## 3. Переменные окружения
 

@@ -10,6 +10,8 @@ export type AgentId =
   | "career-score"
   | "hr-trends"
   | "content-ideas"
+  | "english-coach"
+  | "hebrew-coach"
   | "calendar-assistant"
   | "telegram-sources"
   | "personal-digest"
@@ -30,6 +32,8 @@ export const AGENTS: AgentDef[] = [
   { id: "content-ideas", name: "Content Ideas", desc: "Предлагает идеи постов для Telegram и LinkedIn на основе ваших трендов и заметок", runnable: true, via: "anthropic" },
   { id: "career-search", name: "Career Search", desc: "Ищет релевантные вакансии и пишет карточки в раздел «Карьера» (без скоринга — быстро)", runnable: true, via: "anthropic" },
   { id: "career-score", name: "Career Scoring", desc: "Досчитывает fit_score и позиционирование для новых вакансий (батчами)", runnable: true, via: "anthropic" },
+  { id: "english-coach", name: "English Coach", desc: "Готовит карточки English (C2): HR-лексика, идиомы, язык интервью и переговоров", runnable: true, via: "anthropic" },
+  { id: "hebrew-coach", name: "Hebrew Coach", desc: "Готовит карточки иврита: бытовые слова и фразы с транслитерацией", runnable: true, via: "anthropic" },
   { id: "calendar-assistant", name: "Calendar Assistant", desc: "Готовит pending-события (добавление в календарь — только после подтверждения)", runnable: false, via: "external" },
   { id: "telegram-sources", name: "Telegram Sources", desc: "Сохраняет материалы из Telegram-каналов в Drive · Telegram Sources", runnable: false, via: "external" },
   { id: "personal-digest", name: "Personal Digest", desc: "Утренний дайджест: задачи, события, свежие сигналы одним сообщением", runnable: false, via: "external" },
@@ -428,6 +432,60 @@ ${platform === "LinkedIn" ? "Формат LinkedIn: профессиональн
 Верни ТОЛЬКО текст поста — без пояснений и markdown-заголовков.`;
   const { text } = await callAnthropic(prompt, { model: MODEL_TIER.sonnet, maxTokens: 900 });
   return { text: text.trim() };
+}
+
+// ---------- Learning OS: English (C2) + Hebrew ----------
+
+export type LearningCard = {
+  term: string;
+  translation: string | null;
+  transliteration: string | null;
+  part_of_speech: string | null;
+  example: string | null;
+  note: string | null;
+  category: string | null;
+  level: string | null;
+};
+
+/** Генерирует карточки изучения языка. existing — уже известные термины (дедуп). */
+export async function generateLearningItems(
+  lang: "en" | "he",
+  count: number,
+  existing: string[],
+): Promise<{ items: LearningCard[]; modelText: string }> {
+  const avoid = existing.slice(0, 80).join(", ");
+  const prompt =
+    lang === "en"
+      ? `Ты — преподаватель английского уровня C2 для русскоязычного HR-специалиста.
+Дай ${count} НОВЫХ продвинутых единиц (слова, идиомы, устойчивые выражения) уровня C1–C2.
+Фокус: HR-лексика и идиомы, язык интервью и переговоров, продвинутая общая лексика.
+НЕ повторяй уже известные: ${avoid || "(пока пусто)"}.
+Для каждой единицы верни ТОЛЬКО валидный JSON-массив без markdown:
+[{"term":"выражение на английском","translation":"перевод на русский","transliteration":null,"part_of_speech":"noun|verb|idiom|phrase|...","example":"естественное предложение (по возможности в HR/деловом контексте)","note":"нюанс: регистр, коллокации, когда уместно","category":"hr|interview|general","level":"C1|C2"}]`
+      : `Ты — преподаватель иврита для начинающего русскоязычного студента.
+Дай ${count} НОВЫХ полезных бытовых слов/коротких фраз (повседневное общение).
+НЕ повторяй уже известные: ${avoid || "(пока пусто)"}.
+Для каждой единицы верни ТОЛЬКО валидный JSON-массив без markdown:
+[{"term":"слово на иврите (с огласовками, если уместно)","translation":"перевод на русский","transliteration":"русская транслитерация произношения","part_of_speech":"noun|verb|phrase|...","example":"короткая фраза на иврите + перевод","note":"подсказка по употреблению","category":"everyday","level":"A1"}]`;
+
+  const { text } = await callAnthropic(prompt, { model: MODEL_TIER.sonnet, maxTokens: 2500 });
+  const raw = parseJsonLoose<any[]>(text);
+  const known = new Set(existing.map((t) => t.trim().toLowerCase()));
+  const s = (v: any) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const items: LearningCard[] = (Array.isArray(raw) ? raw : [])
+    .map((r) => ({
+      term: s(r?.term) || "",
+      translation: s(r?.translation),
+      transliteration: s(r?.transliteration),
+      part_of_speech: s(r?.part_of_speech),
+      example: s(r?.example),
+      note: s(r?.note),
+      category: s(r?.category),
+      level: s(r?.level),
+    }))
+    .filter((it) => it.term && !known.has(it.term.toLowerCase()))
+    .slice(0, count);
+  return { items, modelText: text };
 }
 
 /** Краткое содержание текста файла (Haiku — дёшево). Пусто, если нечего суммировать. */

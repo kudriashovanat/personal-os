@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getAgent, runHrTrends, runContentIdeas, runCareerSearch, scoreVacancies, anthropicConfigured } from "@/lib/agents";
+import { getAgent, runHrTrends, runContentIdeas, runCareerSearch, scoreVacancies, generateLearningItems, anthropicConfigured } from "@/lib/agents";
 import { getSupabase } from "@/lib/supabase";
 import { DEFAULT_NEW_STATUS } from "@/lib/career";
 import { projectToSecondBrain, trendMarkdown, contentIdeaMarkdown } from "@/lib/secondbrain";
@@ -161,6 +161,39 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         } catch { /* пропуск */ }
       }
       summary = `Сгенерировано идей: ${items.length}, добавлено: ${added}${projected ? `, в Second Brain: ${projected}` : ""}`;
+      report = { items };
+    } else if (agent.id === "english-coach" || agent.id === "hebrew-coach") {
+      const lang: "en" | "he" = agent.id === "english-coach" ? "en" : "he";
+      const PER_RUN = 5;
+      // Дедуп: тянем уже известные термины этого языка.
+      let existing: string[] = [];
+      try {
+        const { data } = await sb.from("learning_items").select("term").eq("language", lang).limit(500);
+        existing = (data ?? []).map((r: any) => r.term).filter(Boolean);
+      } catch { /* таблицы ещё нет */ }
+
+      const known = new Set(existing.map((t) => t.toLowerCase()));
+      const { items } = await generateLearningItems(lang, PER_RUN, existing);
+      let added = 0;
+      for (const it of items) {
+        if (known.has(it.term.toLowerCase())) continue; // защита от гонок/дублей
+        try {
+          await sb.from("learning_items").insert({
+            language: lang,
+            term: it.term,
+            translation: it.translation,
+            transliteration: it.transliteration,
+            part_of_speech: it.part_of_speech,
+            example: it.example,
+            note: it.note,
+            category: it.category,
+            level: it.level,
+          });
+          known.add(it.term.toLowerCase());
+          added++;
+        } catch { /* пропуск дубля/сбоя */ }
+      }
+      summary = `${lang === "en" ? "English" : "Иврит"}: новых карточек ${added}`;
       report = { items };
     }
 
