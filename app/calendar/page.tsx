@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Card, SectionTitle, Chip, Empty, Button, Input } from "@/components/ui";
+import { Card, SectionTitle, Chip, Empty, Button, Input, Select } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { MapPin, ExternalLink, Plus, CalendarPlus, ListPlus } from "lucide-react";
+import { MapPin, ExternalLink, Plus, CalendarPlus, ListPlus, Clock } from "lucide-react";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
+// Слоты времени с шагом 15 минут (00:00 … 23:45)
+const TIMES = Array.from({ length: 24 * 4 }, (_, i) => `${String(Math.floor(i / 4)).padStart(2, "0")}:${String((i % 4) * 15).padStart(2, "0")}`);
 
 type CalEvent = { id: string; title: string; start: string; end: string; allDay: boolean; location: string | null; link: string | null };
 
@@ -98,9 +100,24 @@ export default function CalendarPage() {
               <Input placeholder="Название встречи" value={mForm.title} onChange={(e) => setMForm({ ...mForm, title: e.target.value })} />
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <Input type="date" value={mForm.date} onChange={(e) => setMForm({ ...mForm, date: e.target.value })} />
-                <Input type="time" value={mForm.start} onChange={(e) => setMForm({ ...mForm, start: e.target.value })} />
-                <Input type="time" value={mForm.end} onChange={(e) => setMForm({ ...mForm, end: e.target.value })} />
-                <Input placeholder="Место" value={mForm.location} onChange={(e) => setMForm({ ...mForm, location: e.target.value })} />
+                <div className="flex items-center gap-1.5 rounded-xl border border-line bg-white/80 px-2.5">
+                  <Clock size={14} className="shrink-0 text-soft" />
+                  <Select aria-label="Начало" value={mForm.start} className="!border-0 !bg-transparent !px-1 !py-2.5 !ring-0 focus:!ring-0"
+                    onChange={(e) => {
+                      const start = e.target.value;
+                      const idx = TIMES.indexOf(start);
+                      const end = idx >= 0 && TIMES[idx + 4] ? TIMES[idx + 4] : mForm.end;
+                      setMForm({ ...mForm, start, end });
+                    }}>
+                    {TIMES.map((t) => <option key={t}>{t}</option>)}
+                  </Select>
+                  <span className="text-soft">–</span>
+                  <Select aria-label="Конец" value={mForm.end} className="!border-0 !bg-transparent !px-1 !py-2.5 !ring-0 focus:!ring-0"
+                    onChange={(e) => setMForm({ ...mForm, end: e.target.value })}>
+                    {TIMES.map((t) => <option key={t}>{t}</option>)}
+                  </Select>
+                </div>
+                <Input placeholder="Место" value={mForm.location} onChange={(e) => setMForm({ ...mForm, location: e.target.value })} className="sm:col-span-2" />
               </div>
               <Button onClick={addMeeting} disabled={busy || !mForm.title.trim()} className="self-end">{busy ? "Добавляю…" : "Создать встречу"}</Button>
             </div>
