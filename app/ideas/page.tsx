@@ -61,7 +61,7 @@ export default function IdeasPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <SectionTitle eyebrow="Capture" title="Ideas"
+      <SectionTitle eyebrow="Входящие" title="Идеи"
         action={<Button variant={adding ? "ghost" : "primary"} onClick={() => setAdding((v) => !v)}>{adding ? "Отмена" : "+ Идея"}</Button>} />
 
       {adding && (

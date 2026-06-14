@@ -19,7 +19,7 @@ const NAV = [
   { href: "/career", label: "Карьера", icon: Briefcase },
   { href: "/learning", label: "Языки", icon: Languages },
   { href: "/trends", label: "HR-тренды", icon: TrendingUp },
-  { href: "/ideas", label: "Ideas", icon: Lightbulb },
+  { href: "/ideas", label: "Идеи", icon: Lightbulb },
   { href: "/content", label: "Контент-студия", icon: PenLine },
   { href: "/brain", label: "Second Brain", icon: Brain },
   { href: "/graph", label: "Карта знаний", icon: Share2 },

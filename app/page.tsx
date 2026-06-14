@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, CalendarDays, Sparkles } from "lucide-react";
@@ -12,7 +11,6 @@ type Task = { id: string; title: string; category: Category; priority: number; s
 type CalEvent = { id: string; title: string; start: string; end: string; allDay: boolean; location: string | null };
 
 export default function TodayPage() {
-  const { data: session } = useSession();
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [events, setEvents] = useState<CalEvent[] | null>(null);
   const [ideasCount, setIdeasCount] = useState<number | null>(null);
@@ -89,7 +87,7 @@ export default function TodayPage() {
       >
         <div className="eyebrow">{ruDate()}</div>
         <h1 className="mt-2 font-display text-4xl font-light leading-tight tracking-tight lg:text-5xl">
-          {greeting(displayName || session?.user?.name)}
+          {greeting(displayName)}
         </h1>
         {tasks !== null && (
           <p className="mt-3 text-sm font-light text-soft">
