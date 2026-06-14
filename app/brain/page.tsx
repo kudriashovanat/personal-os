@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, SectionTitle, Input, Badge, Chip, Empty } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { Search, ExternalLink, FileText, TrendingUp, PenLine, Briefcase, MessageSquare, StickyNote } from "lucide-react";
+import { Search, ExternalLink, FileText, TrendingUp, PenLine, Briefcase, MessageSquare, StickyNote, Brain } from "lucide-react";
 
 type Hit = {
   type: string; typeLabel: string; title: string; snippet: string;
@@ -11,6 +11,7 @@ type Hit = {
 };
 
 const TYPES = [
+  { id: "vault", label: "Second Brain", icon: Brain },
   { id: "files", label: "Files", icon: FileText },
   { id: "trends", label: "HR Trends", icon: TrendingUp },
   { id: "content", label: "Content Ideas", icon: PenLine },
@@ -19,7 +20,7 @@ const TYPES = [
   { id: "notes", label: "Notes", icon: StickyNote },
 ];
 const TYPE_STYLE: Record<string, string> = {
-  files: "bg-iris-soft text-iris-deep", trends: "bg-sky-soft text-sky", content: "bg-peach-soft text-peach",
+  vault: "bg-iris-soft text-iris-deep", files: "bg-sky-soft text-sky", trends: "bg-sky-soft text-sky", content: "bg-peach-soft text-peach",
   career: "bg-sage-soft text-sage", interviews: "bg-butter-soft text-butter", notes: "bg-line text-soft",
 };
 const ruTime = (s: string | null) => (s ? new Date(s).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" }) : "");
@@ -42,7 +43,7 @@ export default function BrainSearchPage() {
         const d = await r.json();
         setHits(d.hits ?? []);
       } catch { setHits([]); } finally { setLoading(false); }
-    }, 300);
+    }, 450);
     return () => { if (timer.current) clearTimeout(timer.current); };
   }, [q, active]);
 

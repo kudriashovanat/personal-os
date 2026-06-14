@@ -29,8 +29,8 @@ export function ruDate(d: Date = new Date()) {
 export function greeting(name?: string | null) {
   const h = new Date().getHours();
   const part = h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер";
-  const first = name ? name.split(" ")[0] : "";
-  return first ? `${part}, ${first}` : part;
+  const first = name && name.trim() ? name.trim().split(" ")[0] : "Наташа";
+  return `${part}, ${first}`;
 }
 
 // Простое обнаружение даты/времени в тексте быстрой заметки (для предложения добавить в календарь)

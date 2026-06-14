@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
+import { searchDriveMarkdown } from "@/lib/drive";
 
 export const dynamic = "force-dynamic";
 
-// Поиск v1 по Second Brain: keyword (ilike) по таблицам Supabase, где лежат знания.
-// Без vector search — быстро и достаточно для старта.
+// Поиск v1 по Second Brain: keyword (ilike) по таблицам Supabase + полнотекст по
+// markdown-заметкам Drive/Obsidian (включая Telegram-инбокс). Без vector search.
 
-export type SearchType = "files" | "trends" | "content" | "career" | "interviews" | "notes";
+export type SearchType = "files" | "trends" | "content" | "career" | "interviews" | "notes" | "vault";
 export type SearchHit = {
   type: SearchType;
   typeLabel: string;
@@ -20,7 +21,7 @@ export type SearchHit = {
 };
 
 const LABEL: Record<SearchType, string> = {
-  files: "Files", trends: "HR Trends", content: "Content Ideas", career: "Career", interviews: "Interviews", notes: "Notes",
+  files: "Files", trends: "HR Trends", content: "Content Ideas", career: "Career", interviews: "Interviews", notes: "Notes", vault: "Second Brain",
 };
 
 // Безопасный паттерн для PostgREST or-фильтра (wildcard = *), без спецсимволов.
@@ -37,7 +38,9 @@ function snippet(parts: (string | null | undefined)[], q: string): string {
 }
 
 export async function GET(req: NextRequest) {
-  if (!(await getServerSession(authOptions))) return NextResponse.json({ error: "Нет доступа" }, { status: 401 });
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Нет доступа" }, { status: 401 });
+  const token = (session as any).accessToken as string | undefined;
   const sp = req.nextUrl.searchParams;
   const qRaw = (sp.get("q") || "").trim();
   if (qRaw.length < 2) return NextResponse.json({ hits: [] });
@@ -86,6 +89,16 @@ export async function GET(req: NextRequest) {
   if (on("notes")) tasks.push((async () => {
     const { data } = await sb.from("quick_notes").select("text, note_type, created_at").ilike("text", p).limit(PER);
     return (data ?? []).map((r: any): SearchHit => ({ type: "notes", typeLabel: LABEL.notes, title: r.note_type || "Заметка", snippet: snippet([r.text], qRaw), drive_link: null, source_url: null, created_at: r.created_at }));
+  })().catch(() => []));
+
+  // Second Brain: полнотекст по markdown-заметкам Drive/Obsidian (включая Telegram-инбокс).
+  if (on("vault") && token) tasks.push((async () => {
+    const vh = await searchDriveMarkdown(token, qRaw, PER);
+    return vh.map((h): SearchHit => ({
+      type: "vault", typeLabel: LABEL.vault, title: h.title,
+      snippet: h.snippet || "", drive_link: h.webViewLink ?? null, source_url: null,
+      created_at: h.mtime ? new Date(h.mtime).toISOString() : null,
+    }));
   })().catch(() => []));
 
   try {

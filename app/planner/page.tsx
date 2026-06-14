@@ -1,18 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Trash2, Flag } from "lucide-react";
-import { Card, SectionTitle, Button, Input, Select, Checkbox, Progress, Badge, Chip, Empty } from "@/components/ui";
+import { Trash2, Flag, X, Pencil } from "lucide-react";
+import { Card, SectionTitle, Button, Input, Select, Textarea, Checkbox, Progress, Badge, Chip, Empty } from "@/components/ui";
 import { CATEGORIES, CATEGORY_STYLE, todayISO, cn, type Category } from "@/lib/utils";
 
 type Task = {
   id: string;
   title: string;
+  description?: string | null;
   category: Category;
   priority: number;
   status: "todo" | "doing" | "done";
+  quadrant?: string | null;
+  tags?: string[] | null;
   due_date: string | null;
 };
+
+const QUADRANTS: { id: string; label: string }[] = [
+  { id: "", label: "—" },
+  { id: "q1", label: "Срочно и важно" },
+  { id: "q2", label: "Важно, не срочно" },
+  { id: "q3", label: "Срочно, не важно" },
+  { id: "q4", label: "Не срочно, не важно" },
+];
 
 const PRIORITY_LABEL: Record<number, string> = { 1: "P1", 2: "P2", 3: "P3" };
 const PRIORITY_STYLE: Record<number, string> = {
@@ -29,6 +40,7 @@ export default function PlannerPage() {
   const [filter, setFilter] = useState<Category | "Все">("Все");
   const [sort, setSort] = useState<"priority" | "category" | "status">("priority");
   const [error, setError] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
 
   async function load() {
     try {
@@ -143,12 +155,13 @@ export default function PlannerPage() {
                   onChange={(v) => patch(t.id, { status: v ? "done" : "todo" })}
                   label={t.title}
                 />
-                <span className={cn("flex-1 text-sm font-medium", t.status === "done" && "text-soft line-through")}>
+                <button onClick={() => setEditId(t.id)} className={cn("flex-1 text-left text-sm font-medium hover:text-iris-deep", t.status === "done" && "text-soft line-through")}>
                   {t.title}
+                  {t.description && <Pencil size={11} className="ml-1.5 inline text-soft/50" />}
                   {t.due_date && t.due_date < todayISO() && t.status !== "done" && (
                     <Badge className="ml-2 bg-peach-soft text-peach align-middle">перенесена</Badge>
                   )}
-                </span>
+                </button>
                 <button
                   title="Сменить приоритет"
                   onClick={() => patch(t.id, { priority: (t.priority % 3) + 1 })}
@@ -179,6 +192,88 @@ export default function PlannerPage() {
           </ul>
         )}
       </Card>
+
+      {editId && (() => {
+        const t = (tasks ?? []).find((x) => x.id === editId);
+        return t ? <TaskDrawer task={t} onClose={() => setEditId(null)} onPatch={patch} onRemove={(id) => { remove(id); setEditId(null); }} /> : null;
+      })()}
+    </div>
+  );
+}
+
+function TaskDrawer({ task, onClose, onPatch, onRemove }: {
+  task: Task;
+  onClose: () => void;
+  onPatch: (id: string, p: Partial<Task>) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [local, setLocal] = useState(task);
+  useEffect(() => setLocal(task), [task.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const save = (p: Partial<Task>) => onPatch(task.id, p);
+  const saveTitle = () => { const v = (local.title ?? "").trim(); if (v && v !== task.title) save({ title: v }); };
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-ink/20 backdrop-blur-sm" onClick={onClose} />
+      <div className="glass-strong relative ml-auto flex h-full w-full max-w-md flex-col overflow-hidden">
+        <div className="flex items-center justify-between border-b border-line/70 p-4">
+          <span className="eyebrow">Задача</span>
+          <button onClick={onClose} aria-label="Закрыть" className="rounded-full p-1.5 text-soft hover:bg-white/70"><X size={18} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex flex-col gap-4">
+            <Field label="Название">
+              <Input value={local.title} onChange={(e) => setLocal({ ...local, title: e.target.value })} onBlur={saveTitle} />
+            </Field>
+            <Field label="Описание">
+              <Textarea rows={4} value={local.description ?? ""} onChange={(e) => setLocal({ ...local, description: e.target.value })} onBlur={() => save({ description: local.description ?? null })} placeholder="Детали, контекст, ссылки…" />
+            </Field>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Дедлайн">
+                <Input type="date" value={local.due_date ?? ""} onChange={(e) => { setLocal({ ...local, due_date: e.target.value }); save({ due_date: e.target.value || null }); }} />
+              </Field>
+              <Field label="Приоритет">
+                <Select value={local.priority} onChange={(e) => { const v = Number(e.target.value); setLocal({ ...local, priority: v }); save({ priority: v }); }} className="w-full">
+                  <option value={1}>P1 · высокий</option><option value={2}>P2 · средний</option><option value={3}>P3 · низкий</option>
+                </Select>
+              </Field>
+              <Field label="Статус">
+                <Select value={local.status} onChange={(e) => { const v = e.target.value as Task["status"]; setLocal({ ...local, status: v }); save({ status: v }); }} className="w-full">
+                  <option value="todo">К выполнению</option><option value="doing">В работе</option><option value="done">Готово</option>
+                </Select>
+              </Field>
+              <Field label="Фильтр / категория">
+                <Select value={local.category} onChange={(e) => { const v = e.target.value as Category; setLocal({ ...local, category: v }); save({ category: v }); }} className="w-full">
+                  {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                </Select>
+              </Field>
+            </div>
+
+            <Field label="Матрица Эйзенхауэра">
+              <Select value={local.quadrant ?? ""} onChange={(e) => { const v = e.target.value || null; setLocal({ ...local, quadrant: v }); save({ quadrant: v }); }} className="w-full">
+                {QUADRANTS.map((q) => <option key={q.id} value={q.id}>{q.label}</option>)}
+              </Select>
+            </Field>
+
+            <Field label="Теги" hint="через запятую">
+              <Input value={(local.tags ?? []).join(", ")} onChange={(e) => setLocal({ ...local, tags: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} onBlur={() => save({ tags: local.tags ?? [] })} placeholder="напр. собеседование, срочно" />
+            </Field>
+
+            <Button variant="danger" className="self-start" onClick={() => onRemove(task.id)}><Trash2 size={15} /> Удалить задачу</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-soft">{label}{hint ? ` · ${hint}` : ""}</div>
+      {children}
     </div>
   );
 }

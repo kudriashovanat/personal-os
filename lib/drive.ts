@@ -232,6 +232,41 @@ function firstLine(content: string): string {
   return content.replace(/^---\n[\s\S]*?\n---\n?/, "").split("\n").find((l) => l.trim()) ?? "";
 }
 
+export type VaultHit = { id: string; title: string; snippet: string; webViewLink?: string; mtime: number };
+
+/**
+ * Полнотекстовый поиск по ВСЕМ markdown-заметкам в Drive (включая Telegram-инбокс
+ * Obsidian, агентские артефакты, файлы) — НЕ ограничен папкой "Personal OS".
+ * Требует scope drive.readonly (он уже в auth). Google делает fullText на своей стороне.
+ */
+export async function searchDriveMarkdown(token: string, query: string, limit = 20): Promise<VaultHit[]> {
+  const term = query.trim();
+  if (!term) return [];
+  const q = `trashed = false and (mimeType = 'text/markdown' or name contains '.md') and fullText contains '${esc(term)}'`;
+  const url = `${API}/files?q=${encodeURIComponent(q)}&fields=${encodeURIComponent("files(id,name,modifiedTime,webViewLink)")}&orderBy=modifiedTime desc&pageSize=${limit}`;
+  const data = await (await gfetch(token, url)).json();
+  const files = (data.files ?? []).filter((f: any) => /\.md$/i.test(f.name));
+
+  const needle = term.toLowerCase();
+  const READ = 8; // сниппеты читаем только для первых N — экономим время/квоту
+  const hits: VaultHit[] = [];
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    let snippet = "";
+    if (i < READ) {
+      try {
+        const content = await (await gfetch(token, `${API}/files/${f.id}?alt=media`)).text();
+        const idx = content.toLowerCase().indexOf(needle);
+        snippet = idx >= 0
+          ? (idx > 60 ? "…" : "") + content.slice(Math.max(0, idx - 60), idx + needle.length + 90).replace(/\n+/g, " ") + "…"
+          : firstLine(content);
+      } catch { /* нет доступа к содержимому */ }
+    }
+    hits.push({ id: f.id, title: f.name.replace(/\.md$/i, ""), snippet, webViewLink: f.webViewLink, mtime: new Date(f.modifiedTime).getTime() });
+  }
+  return hits;
+}
+
 // ---------- Создание и обновление ----------
 
 function multipartBody(metadata: object, mime: string, content: string | Buffer) {

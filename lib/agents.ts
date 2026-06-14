@@ -490,6 +490,53 @@ export async function generateLearningItems(
   return { items, modelText: text };
 }
 
+// ---------- Ideas / Inbox: AI action detector ----------
+
+export type IdeaAction = "task" | "content" | "note" | "archive";
+export type IdeaSuggestion = {
+  action: IdeaAction;
+  reason: string;
+  task: { title: string; description: string; due_date: string | null; priority: number; tags: string[] } | null;
+  content: { title: string; platform: "Telegram" | "LinkedIn" } | null;
+};
+
+export async function detectIdeaAction(title: string | null, content: string): Promise<{ data: IdeaSuggestion; modelText: string }> {
+  const today = new Date().toISOString().slice(0, 10);
+  const prompt = `Ты — ассистент по обработке входящих заметок/идей. Сегодня ${today}.
+Заметка:${title ? `\nЗаголовок: ${title}` : ""}
+Текст: ${content.slice(0, 4000)}
+
+Реши ОДНО лучшее действие:
+- "task" — это конкретное дело/действие → нужно завести задачу;
+- "content" — это идея для поста/контента → в контент-план;
+- "note" — справочная мысль, оставить заметкой;
+- "archive" — неактуально/мусор, в архив.
+
+Если task: предложи title (коротко, в повелительном), description (из текста), due_date (YYYY-MM-DD если в тексте есть срок/дата, иначе null), priority (1 высокий … 3 низкий), tags (массив, можно пустой).
+Если content: title и platform ("Telegram" или "LinkedIn").
+
+Верни ТОЛЬКО валидный JSON без markdown:
+{"action":"task|content|note|archive","reason":"1 фраза почему","task":{"title":"...","description":"...","due_date":null,"priority":2,"tags":[]} или null,"content":{"title":"...","platform":"Telegram"} или null}`;
+
+  const { text } = await callAnthropic(prompt, { model: MODEL_TIER.haiku, maxTokens: 900 });
+  const r = parseJsonLoose<any>(text);
+  const act: IdeaAction = ["task", "content", "note", "archive"].includes(r?.action) ? r.action : "note";
+  const str = (v: any) => (typeof v === "string" ? v : "");
+  const task = r?.task && act === "task"
+    ? {
+        title: str(r.task.title) || (title ?? content.slice(0, 60)),
+        description: str(r.task.description),
+        due_date: typeof r.task.due_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.task.due_date) ? r.task.due_date : null,
+        priority: [1, 2, 3].includes(Number(r.task.priority)) ? Number(r.task.priority) : 2,
+        tags: Array.isArray(r.task.tags) ? r.task.tags.filter((t: any) => typeof t === "string") : [],
+      }
+    : null;
+  const content2 = r?.content && act === "content"
+    ? { title: str(r.content.title) || (title ?? "Идея поста"), platform: r.content.platform === "LinkedIn" ? "LinkedIn" as const : "Telegram" as const }
+    : null;
+  return { data: { action: act, reason: str(r?.reason), task, content: content2 }, modelText: text };
+}
+
 /** Краткое содержание текста файла (Haiku — дёшево). Пусто, если нечего суммировать. */
 export async function summarizeText(text: string, name: string): Promise<string> {
   const t = (text || "").trim();

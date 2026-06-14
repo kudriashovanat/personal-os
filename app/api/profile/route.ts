@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 // Foundation-сущность: профиль пользователя (синглтон). Используется скорингом и
 // Calibrator. Доступ только через service-role на сервере.
-const FIELDS = ["cv_text", "experience", "achievements", "languages", "location", "target_roles", "target_level"] as const;
+const FIELDS = ["display_name", "first_name", "cv_text", "experience", "achievements", "languages", "location", "target_roles", "target_level"] as const;
 
 export async function GET() {
   if (!(await getServerSession(authOptions))) return NextResponse.json({ error: "Нет доступа" }, { status: 401 });

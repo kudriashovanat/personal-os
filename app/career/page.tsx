@@ -341,7 +341,7 @@ function Drawer({ item, onClose, onPatch, onRemove }: {
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-ink/20 backdrop-blur-sm" onClick={onClose} />
-      <div className="glass-strong relative ml-auto flex h-full w-full max-w-md flex-col overflow-hidden">
+      <div className="glass-strong relative ml-auto flex h-full w-full max-w-[1360px] flex-col overflow-hidden md:w-[58%] md:min-w-[680px]">
         {/* Header */}
         <div className="flex items-start gap-3 border-b border-line/70 p-4">
           <div className="min-w-0 flex-1">
