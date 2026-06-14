@@ -3,11 +3,11 @@
 @tailwind utilities;
 
 :root {
-  /* Мягкая воздушная палитра mesh (приглушённая, не «единорог») */
-  --bloom-1: #B7AEE0; /* пыльная лаванда */
-  --bloom-2: #E6C3C9; /* глина-роза */
-  --bloom-3: #AFC6E6; /* сдержанное небо */
-  --bloom-4: #BFD9C9; /* эвкалипт */
+  /* Светлая иридесцентная палитра mesh (перелив через hue-rotate) */
+  --bloom-1: #A78BFA; /* лаванда */
+  --bloom-2: #F0ABFC; /* розово-сиреневый */
+  --bloom-3: #67E8F9; /* голубой */
+  --bloom-4: #6EE7B7; /* мятный */
 }
 
 html { -webkit-text-size-adjust: 100%; }
@@ -24,27 +24,19 @@ body::before {
   inset: -25%;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.6;
-  filter: blur(42px);
-  will-change: transform, filter;
-  background-image:
-    radial-gradient(40% 40% at 16% 20%, var(--bloom-1) 0%, transparent 62%),
-    radial-gradient(38% 38% at 86% 14%, var(--bloom-2) 0%, transparent 62%),
-    radial-gradient(46% 46% at 80% 88%, var(--bloom-3) 0%, transparent 64%),
-    radial-gradient(42% 42% at 16% 90%, var(--bloom-4) 0%, transparent 62%);
-  /* breathe — медленное движение, shimmer — лёгкий перелив оттенка */
-  animation: breathe 30s ease-in-out infinite, shimmer 44s ease-in-out infinite;
+  opacity: 0.42;
+  filter: blur(48px);
+  will-change: background-position;
+  /* Aurora — плывущие диагональные ленты цвета */
+  background-image: linear-gradient(115deg, #8B5CF6, #EC4899, #06B6D4, #14B8A6, #8B5CF6);
+  background-size: 300% 300%;
+  animation: aurora 22s ease infinite;
 }
 
-@keyframes breathe {
-  0%, 100% { transform: scale(1) rotate(0deg) translate(0, 0); }
-  33% { transform: scale(1.08) rotate(1.5deg) translate(1.5%, -1%); }
-  66% { transform: scale(1.05) rotate(-1.5deg) translate(-1.5%, 1%); }
-}
-
-@keyframes shimmer {
-  0%, 100% { filter: blur(42px) hue-rotate(0deg); }
-  50% { filter: blur(48px) hue-rotate(24deg); }
+@keyframes aurora {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 /* Прозрачное морозное стекло + мягкое свечение. */
