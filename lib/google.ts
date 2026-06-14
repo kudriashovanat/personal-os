@@ -23,6 +23,32 @@ export async function listCalendarEvents(accessToken: string, timeMin: string, t
   }));
 }
 
+// Создание события в Google Calendar (scope calendar.events). Только по явному
+// действию пользователя (форма + кнопка) — не из агентов автоматически.
+export async function createCalendarEvent(
+  accessToken: string,
+  ev: { title: string; start: string; end: string; allDay?: boolean; location?: string | null },
+) {
+  const body: any = {
+    summary: ev.title,
+    location: ev.location || undefined,
+    start: ev.allDay ? { date: ev.start } : { dateTime: ev.start },
+    end: ev.allDay ? { date: ev.end } : { dateTime: ev.end },
+  };
+  const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Calendar API: ${res.status} ${await res.text()}`);
+  const e = await res.json();
+  return {
+    id: e.id, title: e.summary ?? "(без названия)",
+    start: e.start?.dateTime ?? e.start?.date, end: e.end?.dateTime ?? e.end?.date,
+    allDay: !e.start?.dateTime, location: e.location ?? null, link: e.htmlLink ?? null,
+  };
+}
+
 // Папки Second Brain в Drive (канон для знаний). По одному env-id на домен.
 export type SecondBrainFolder = "hr-trends" | "content-ideas" | "career";
 export function secondBrainFolderId(name: SecondBrainFolder): string | null {

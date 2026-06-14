@@ -67,11 +67,16 @@ function Shell({ children }: { children: React.ReactNode }) {
             href={href}
             onClick={() => setMenuOpen(false)}
             className={cn(
-              "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
-              active ? "bg-white text-ink shadow-card" : "text-soft hover:bg-white/60 hover:text-ink"
+              "group relative flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all duration-200",
+              active
+                ? "bg-white/80 font-semibold text-ink shadow-card ring-1 ring-iris/15"
+                : "font-medium text-soft hover:bg-white/55 hover:text-ink"
             )}
           >
-            <Icon size={17} strokeWidth={2} className={active ? "text-iris" : ""} />
+            {active && <span className="absolute left-0 top-1/2 h-5 -translate-y-1/2 rounded-r-full bg-iris" style={{ width: 3 }} />}
+            <span className={cn("flex h-7 w-7 items-center justify-center rounded-lg transition-colors", active ? "bg-iris-soft text-iris-deep" : "text-soft group-hover:text-ink")}>
+              <Icon size={16} strokeWidth={2} />
+            </span>
             {label}
           </Link>
         );

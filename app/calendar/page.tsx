@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Card, SectionTitle, Chip, Empty } from "@/components/ui";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Card, SectionTitle, Chip, Empty, Button, Input } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { MapPin, ExternalLink } from "lucide-react";
+import { MapPin, ExternalLink, Plus, CalendarPlus, ListPlus } from "lucide-react";
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
 
 type CalEvent = { id: string; title: string; start: string; end: string; allDay: boolean; location: string | null; link: string | null };
 
@@ -13,8 +15,13 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<CalEvent[] | null>(null);
   const [view, setView] = useState<"day" | "week">("day");
   const [error, setError] = useState<string | null>(null);
+  const [adding, setAdding] = useState<null | "meeting" | "task">(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [mForm, setMForm] = useState({ title: "", date: todayISO(), start: "10:00", end: "11:00", location: "" });
+  const [tForm, setTForm] = useState({ title: "", date: todayISO() });
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetch("/api/calendar/events?days=7")
       .then(async (r) => {
         const d = await r.json();
@@ -23,6 +30,34 @@ export default function CalendarPage() {
       })
       .catch((e) => { setError(e.message); setEvents([]); });
   }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function addMeeting() {
+    if (!mForm.title.trim()) return;
+    setBusy(true); setMsg(null);
+    try {
+      const start = new Date(`${mForm.date}T${mForm.start}:00`).toISOString();
+      const end = new Date(`${mForm.date}T${mForm.end}:00`).toISOString();
+      const r = await fetch("/api/calendar/events", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: mForm.title, start, end, allDay: false, location: mForm.location || null }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Не удалось");
+      setMsg("Встреча добавлена в Google Calendar ✓");
+      setMForm({ ...mForm, title: "", location: "" }); setAdding(null); load();
+    } catch (e: any) { setMsg(e.message); } finally { setBusy(false); }
+  }
+  async function addTask() {
+    if (!tForm.title.trim()) return;
+    setBusy(true); setMsg(null);
+    try {
+      const r = await fetch("/api/tasks", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: tForm.title.trim(), due_date: tForm.date }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Не удалось");
+      setMsg("Задача добавлена в Планер ✓");
+      setTForm({ ...tForm, title: "" }); setAdding(null);
+    } catch (e: any) { setMsg(e.message); } finally { setBusy(false); }
+  }
 
   const todayKey = new Date().toDateString();
   const dayEvents = useMemo(() => (events ?? []).filter((e) => new Date(e.start).toDateString() === todayKey), [events, todayKey]);
@@ -41,15 +76,47 @@ export default function CalendarPage() {
   return (
     <div className="mx-auto max-w-4xl">
       <SectionTitle
-        eyebrow="Google Calendar · только чтение"
+        eyebrow="Google Calendar"
         title="Календарь"
         action={
-          <div className="flex gap-1.5">
+          <div className="flex items-center gap-1.5">
             <Chip active={view === "day"} onClick={() => setView("day")}>День</Chip>
             <Chip active={view === "week"} onClick={() => setView("week")}>Неделя</Chip>
+            <Button variant="primary" className="ml-1 !py-1.5" onClick={() => setAdding((a) => (a ? null : "meeting"))}><Plus size={15} /> Добавить</Button>
           </div>
         }
       />
+
+      {adding && (
+        <Card className="mb-4">
+          <div className="mb-3 flex gap-1.5">
+            <Chip active={adding === "meeting"} onClick={() => setAdding("meeting")}><CalendarPlus size={12} className="mr-1 inline" />Встреча</Chip>
+            <Chip active={adding === "task"} onClick={() => setAdding("task")}><ListPlus size={12} className="mr-1 inline" />Задача</Chip>
+          </div>
+          {adding === "meeting" ? (
+            <div className="flex flex-col gap-2">
+              <Input placeholder="Название встречи" value={mForm.title} onChange={(e) => setMForm({ ...mForm, title: e.target.value })} />
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <Input type="date" value={mForm.date} onChange={(e) => setMForm({ ...mForm, date: e.target.value })} />
+                <Input type="time" value={mForm.start} onChange={(e) => setMForm({ ...mForm, start: e.target.value })} />
+                <Input type="time" value={mForm.end} onChange={(e) => setMForm({ ...mForm, end: e.target.value })} />
+                <Input placeholder="Место" value={mForm.location} onChange={(e) => setMForm({ ...mForm, location: e.target.value })} />
+              </div>
+              <Button onClick={addMeeting} disabled={busy || !mForm.title.trim()} className="self-end">{busy ? "Добавляю…" : "Создать встречу"}</Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <Input placeholder="Задача" value={tForm.title} onChange={(e) => setTForm({ ...tForm, title: e.target.value })} onKeyDown={(e) => e.key === "Enter" && addTask()} />
+              <div className="flex items-center gap-2">
+                <Input type="date" value={tForm.date} onChange={(e) => setTForm({ ...tForm, date: e.target.value })} className="max-w-[180px]" />
+                <Button onClick={addTask} disabled={busy || !tForm.title.trim()} className="ml-auto">{busy ? "Добавляю…" : "Создать задачу"}</Button>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {msg && <div className="mb-4 rounded-xl bg-sage-soft/60 px-4 py-2.5 text-sm text-ink/80">{msg}</div>}
 
       {error && (
         <Card className="mb-4 bg-butter-soft/60">
