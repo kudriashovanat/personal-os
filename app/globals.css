@@ -24,20 +24,26 @@ body::before {
   inset: -25%;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.42;
-  filter: blur(48px);
-  will-change: background-position;
-  /* Aurora — плывущие диагональные ленты цвета */
-  background-image: linear-gradient(115deg, #8B5CF6, #EC4899, #06B6D4, #14B8A6, #8B5CF6);
-  background-size: 300% 300%;
-  animation: aurora 22s ease infinite;
+  opacity: 0.5;
+  filter: blur(46px);
+  will-change: transform;
+  /* Живой mesh — блобы цвета медленно двигаются и масштабируются */
+  background-image:
+    radial-gradient(38% 38% at 18% 22%, #8B5CF6 0%, transparent 60%),
+    radial-gradient(36% 36% at 84% 16%, #EC4899 0%, transparent 60%),
+    radial-gradient(42% 42% at 80% 84%, #06B6D4 0%, transparent 62%),
+    radial-gradient(40% 40% at 16% 86%, #14B8A6 0%, transparent 60%);
+  animation: meshmove 16s ease-in-out infinite;
 }
 
-@keyframes aurora {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+@keyframes meshmove {
+  0%, 100% { transform: scale(1) translate(0, 0) rotate(0deg); }
+  50% { transform: scale(1.18) translate(4%, -3%) rotate(6deg); }
 }
+
+/* Скрытый скроллбар (функция прокрутки остаётся) */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 
 /* Прозрачное морозное стекло + мягкое свечение. */
 .glass {
