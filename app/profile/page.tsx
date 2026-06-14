@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, SectionTitle, Button, Input, Textarea, Badge } from "@/components/ui";
 import { TARGET_ROLES, TARGET_LEVEL } from "@/lib/career";
+import { CareerNav } from "@/components/CareerNav";
 import { IdCard, Check } from "lucide-react";
 
 type Profile = {
@@ -66,6 +67,7 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-3xl">
+      <CareerNav />
       <SectionTitle
         eyebrow="Foundation"
         title="Профиль"

@@ -6,6 +6,7 @@ import { Card, SectionTitle, Button, Input, Select, Textarea, Badge, Chip, Empty
 import { cn } from "@/lib/utils";
 import { CAREER_STATUSES, normalizeStatus, DEFAULT_NEW_STATUS, DIMENSION_AXES, ROUND_TYPES, ROUND_LABEL, type CareerStatus } from "@/lib/career";
 import type { Calibration, InterviewPrep, InterviewAnalysis, DebriefPattern, RejectionClassification } from "@/lib/agents";
+import { CareerNav } from "@/components/CareerNav";
 
 const LIKELIHOOD_META: Record<string, string> = {
   high: "bg-rose-soft text-rose", medium: "bg-butter-soft text-butter", low: "bg-line text-soft",
@@ -201,6 +202,7 @@ export default function CareerPage() {
 
   return (
     <div className="mx-auto max-w-[1400px]">
+      <CareerNav />
       <SectionTitle
         eyebrow="Поиск работы"
         title="Карьера"

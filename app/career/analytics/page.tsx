@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, SectionTitle, Button, Badge, Empty } from "@/components/ui";
+import { CareerNav } from "@/components/CareerNav";
 import { cn } from "@/lib/utils";
 import type { Analytics } from "@/lib/analytics";
 import { ArrowLeft, TrendingUp, AlertTriangle, Send } from "lucide-react";
@@ -20,6 +21,7 @@ export default function CareerAnalyticsPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
+      <CareerNav />
       <SectionTitle
         eyebrow="Поиск работы"
         title="Аналитика откликов"

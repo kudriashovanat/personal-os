@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   Sun, CheckSquare, LayoutGrid, CalendarDays, Briefcase, TrendingUp, PenLine,
-  Brain, Share2, HeartHandshake, Target, Users, Bot, FolderUp, LogOut, Menu, X, Feather, IdCard, Languages,
+  Brain, Share2, HeartHandshake, Target, Users, Bot, FolderUp, LogOut, Menu, X, Feather, Languages, Lightbulb,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { QuickNote } from "@/components/QuickNote";
@@ -17,9 +17,9 @@ const NAV = [
   { href: "/matrix", label: "Матрица", icon: LayoutGrid },
   { href: "/calendar", label: "Календарь", icon: CalendarDays },
   { href: "/career", label: "Карьера", icon: Briefcase },
-  { href: "/profile", label: "Профиль", icon: IdCard },
   { href: "/learning", label: "Языки", icon: Languages },
   { href: "/trends", label: "HR-тренды", icon: TrendingUp },
+  { href: "/ideas", label: "Ideas", icon: Lightbulb },
   { href: "/content", label: "Контент-студия", icon: PenLine },
   { href: "/brain", label: "Second Brain", icon: Brain },
   { href: "/graph", label: "Карта знаний", icon: Share2 },

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, SectionTitle, Button, Badge, Chip, Empty } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { LANGS, LANG_LABEL, statusOf, type Lang } from "@/lib/learning";
+import { CareerNav } from "@/components/CareerNav";
 import { Sparkles, Trash2, RotateCcw, Check, X } from "lucide-react";
 
 type Item = {
@@ -92,6 +93,7 @@ export default function LearningPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
+      <CareerNav />
       <SectionTitle
         eyebrow="Learning OS"
         title="Изучение языков"

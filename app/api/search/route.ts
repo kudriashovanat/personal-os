@@ -87,8 +87,8 @@ export async function GET(req: NextRequest) {
   })().catch(() => []));
 
   if (on("notes")) tasks.push((async () => {
-    const { data } = await sb.from("quick_notes").select("text, note_type, created_at").ilike("text", p).limit(PER);
-    return (data ?? []).map((r: any): SearchHit => ({ type: "notes", typeLabel: LABEL.notes, title: r.note_type || "Заметка", snippet: snippet([r.text], qRaw), drive_link: null, source_url: null, created_at: r.created_at }));
+    const { data } = await sb.from("inbox_items").select("title, content, drive_link, created_at").or(`title.ilike.${p},content.ilike.${p}`).limit(PER);
+    return (data ?? []).map((r: any): SearchHit => ({ type: "notes", typeLabel: LABEL.notes, title: r.title || "Идея", snippet: snippet([r.content], qRaw), drive_link: r.drive_link ?? null, source_url: null, created_at: r.created_at }));
   })().catch(() => []));
 
   // Second Brain: полнотекст по markdown-заметкам Drive/Obsidian (включая Telegram-инбокс).

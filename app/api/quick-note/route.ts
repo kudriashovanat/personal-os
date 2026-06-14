@@ -28,16 +28,24 @@ export async function POST(req: NextRequest) {
       "",
     ].join("\n");
 
-    let savedTo = "журнал (Supabase)";
+    let savedTo = "Ideas (Supabase)";
+    let drive_id: string | null = null, drive_link: string | null = null;
     const accessToken = (session as any).accessToken as string | undefined;
     if (accessToken) {
       const drive = await createMarkdownInDrive(accessToken, fileName, md);
-      if (drive.ok) savedTo = "Obsidian · Inbox";
+      if (drive.ok) { savedTo = "Obsidian · Inbox"; drive_id = drive.file.id; drive_link = drive.file.webViewLink ?? null; }
     }
 
-    // Журнальная копия (не источник истины)
+    // Быстрый capture попадает в Ideas/Inbox (inbox_items) — единый источник входящих.
     try {
-      await getSupabase().from("quick_notes").insert({ text: text.trim(), note_type: type ?? "Мысль" });
+      await getSupabase().from("inbox_items").insert({
+        title: text.trim().split("\n")[0].slice(0, 80),
+        content: text.trim(),
+        tags: [type ?? "Мысль"],
+        source: "note",
+        status: "new",
+        drive_id, drive_link,
+      });
     } catch {
       /* Supabase может быть ещё не настроен — заметка уже в Obsidian */
     }

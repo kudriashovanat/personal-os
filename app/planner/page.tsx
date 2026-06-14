@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Trash2, Flag, X, Pencil } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Trash2, Flag, X, Pencil, Settings2, Plus } from "lucide-react";
 import { Card, SectionTitle, Button, Input, Select, Textarea, Checkbox, Progress, Badge, Chip, Empty } from "@/components/ui";
-import { CATEGORIES, CATEGORY_STYLE, todayISO, cn, type Category } from "@/lib/utils";
+import { todayISO, cn } from "@/lib/utils";
+
+type Filter = { id: string; name: string; color: string };
+const PALETTE = ["#7C6FE4", "#5E8FC9", "#7FA877", "#E2906B", "#D2738F", "#C9A23F", "#14B8A6", "#8B7FD4"];
 
 type Task = {
   id: string;
   title: string;
   description?: string | null;
-  category: Category;
+  category: string;
   priority: number;
   status: "todo" | "doing" | "done";
   quadrant?: string | null;
@@ -34,13 +37,46 @@ const PRIORITY_STYLE: Record<number, string> = {
 
 export default function PlannerPage() {
   const [tasks, setTasks] = useState<Task[] | null>(null);
+  const [filters, setFilters] = useState<Filter[]>([]);
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<Category>("Главное");
+  const [category, setCategory] = useState("Главное");
   const [priority, setPriority] = useState(2);
-  const [filter, setFilter] = useState<Category | "Все">("Все");
+  const [filter, setFilter] = useState<string>("Все");
   const [sort, setSort] = useState<"priority" | "category" | "status">("priority");
   const [error, setError] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  const [manageFilters, setManageFilters] = useState(false);
+  const [newFilter, setNewFilter] = useState("");
+
+  const colorOf = useCallback((name: string) => filters.find((f) => f.name === name)?.color ?? "#9b96ab", [filters]);
+
+  const loadFilters = useCallback(async () => {
+    try {
+      const r = await fetch("/api/collection/task_filters");
+      const d = await r.json();
+      if (Array.isArray(d)) {
+        setFilters(d);
+        if (d[0] && !d.some((f: Filter) => f.name === category)) setCategory(d[0].name);
+      }
+    } catch { /* таблицы ещё нет */ }
+  }, [category]);
+  useEffect(() => { loadFilters(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function addFilter() {
+    const name = newFilter.trim();
+    if (!name || filters.some((f) => f.name === name)) return;
+    const color = PALETTE[filters.length % PALETTE.length];
+    const r = await fetch("/api/collection/task_filters", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, color }) });
+    if (r.ok) { const created = await r.json(); setFilters((p) => [...p, created]); setNewFilter(""); }
+  }
+  async function patchFilter(id: string, p: Partial<Filter>) {
+    setFilters((prev) => prev.map((f) => (f.id === id ? { ...f, ...p } : f)));
+    await fetch("/api/collection/task_filters", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...p }) });
+  }
+  async function deleteFilter(id: string) {
+    setFilters((prev) => prev.filter((f) => f.id !== id));
+    await fetch("/api/collection/task_filters", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+  }
 
   async function load() {
     try {
@@ -107,8 +143,8 @@ export default function PlannerPage() {
             onKeyDown={(e) => e.key === "Enter" && add()}
           />
           <div className="flex gap-2">
-            <Select value={category} onChange={(e) => setCategory(e.target.value as Category)} aria-label="Категория">
-              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+            <Select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Фильтр">
+              {filters.map((f) => <option key={f.id}>{f.name}</option>)}
             </Select>
             <Select value={priority} onChange={(e) => setPriority(Number(e.target.value))} aria-label="Приоритет">
               <option value={1}>P1</option><option value={2}>P2</option><option value={3}>P3</option>
@@ -120,17 +156,44 @@ export default function PlannerPage() {
 
       <div className="mb-4 flex flex-wrap items-center gap-1.5">
         <Chip active={filter === "Все"} onClick={() => setFilter("Все")}>Все</Chip>
-        {CATEGORIES.map((c) => (
-          <Chip key={c} active={filter === c} onClick={() => setFilter(c)}>{c}</Chip>
+        {filters.map((f) => (
+          <Chip key={f.id} active={filter === f.name} onClick={() => setFilter(f.name)}>
+            <span className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ backgroundColor: f.color }} />{f.name}
+          </Chip>
         ))}
+        <button onClick={() => setManageFilters((v) => !v)} aria-label="Настроить фильтры" className="rounded-full p-1.5 text-soft hover:bg-white/70 hover:text-ink"><Settings2 size={15} /></button>
         <div className="ml-auto">
           <Select value={sort} onChange={(e) => setSort(e.target.value as any)} className="!py-1.5 text-xs" aria-label="Сортировка">
             <option value="priority">По приоритету</option>
-            <option value="category">По категории</option>
+            <option value="category">По фильтру</option>
             <option value="status">По статусу</option>
           </Select>
         </div>
       </div>
+
+      {manageFilters && (
+        <Card className="mb-4">
+          <div className="mb-2 text-xs font-semibold text-soft">Фильтры</div>
+          <div className="flex flex-col gap-2">
+            {filters.map((f) => (
+              <div key={f.id} className="flex items-center gap-2">
+                <div className="flex gap-1">
+                  {PALETTE.map((c) => (
+                    <button key={c} onClick={() => patchFilter(f.id, { color: c })} aria-label="Цвет"
+                      className={cn("h-4 w-4 rounded-full transition", f.color === c && "ring-2 ring-offset-1 ring-ink/40")} style={{ backgroundColor: c }} />
+                  ))}
+                </div>
+                <Input value={f.name} onChange={(e) => setFilters((prev) => prev.map((x) => (x.id === f.id ? { ...x, name: e.target.value } : x)))} onBlur={() => f.name.trim() && patchFilter(f.id, { name: f.name.trim() })} className="!py-1.5 text-sm" />
+                <button onClick={() => deleteFilter(f.id)} aria-label="Удалить фильтр" className="rounded-full p-1.5 text-soft/50 hover:bg-rose-soft hover:text-rose"><Trash2 size={14} /></button>
+              </div>
+            ))}
+            <div className="flex items-center gap-2 pt-1">
+              <Input placeholder="Новый фильтр" value={newFilter} onChange={(e) => setNewFilter(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addFilter()} className="!py-1.5 text-sm" />
+              <Button variant="soft" className="!py-1.5" onClick={addFilter} disabled={!newFilter.trim()}><Plus size={14} /> Добавить</Button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <Card>
         <div className="mb-4">
@@ -169,7 +232,9 @@ export default function PlannerPage() {
                 >
                   <Flag size={10} className="mr-0.5 inline" />{PRIORITY_LABEL[t.priority]}
                 </button>
-                <Badge className={CATEGORY_STYLE[t.category]?.chip ?? "bg-line"}>{t.category}</Badge>
+                <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-soft">
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: colorOf(t.category) }} />{t.category}
+                </span>
                 <Select
                   value={t.status}
                   onChange={(e) => patch(t.id, { status: e.target.value as Task["status"] })}
@@ -195,14 +260,15 @@ export default function PlannerPage() {
 
       {editId && (() => {
         const t = (tasks ?? []).find((x) => x.id === editId);
-        return t ? <TaskDrawer task={t} onClose={() => setEditId(null)} onPatch={patch} onRemove={(id) => { remove(id); setEditId(null); }} /> : null;
+        return t ? <TaskDrawer task={t} filters={filters} onClose={() => setEditId(null)} onPatch={patch} onRemove={(id) => { remove(id); setEditId(null); }} /> : null;
       })()}
     </div>
   );
 }
 
-function TaskDrawer({ task, onClose, onPatch, onRemove }: {
+function TaskDrawer({ task, filters, onClose, onPatch, onRemove }: {
   task: Task;
+  filters: Filter[];
   onClose: () => void;
   onPatch: (id: string, p: Partial<Task>) => void;
   onRemove: (id: string) => void;
@@ -244,9 +310,10 @@ function TaskDrawer({ task, onClose, onPatch, onRemove }: {
                   <option value="todo">К выполнению</option><option value="doing">В работе</option><option value="done">Готово</option>
                 </Select>
               </Field>
-              <Field label="Фильтр / категория">
-                <Select value={local.category} onChange={(e) => { const v = e.target.value as Category; setLocal({ ...local, category: v }); save({ category: v }); }} className="w-full">
-                  {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              <Field label="Фильтр">
+                <Select value={local.category} onChange={(e) => { const v = e.target.value; setLocal({ ...local, category: v }); save({ category: v }); }} className="w-full">
+                  {filters.map((f) => <option key={f.id}>{f.name}</option>)}
+                  {!filters.some((f) => f.name === local.category) && <option>{local.category}</option>}
                 </Select>
               </Field>
             </div>

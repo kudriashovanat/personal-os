@@ -33,11 +33,13 @@ export async function POST(req: NextRequest) {
       .from("tasks")
       .insert({
         title: body.title,
+        description: body.description ?? null,
         category: body.category ?? "Главное",
         priority: body.priority ?? 2,
         status: "todo",
         quadrant: body.quadrant ?? null,
         due_date: body.due_date ?? null,
+        tags: Array.isArray(body.tags) ? body.tags : undefined,
       })
       .select()
       .single();

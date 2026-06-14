@@ -16,6 +16,8 @@ export default function TodayPage() {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [events, setEvents] = useState<CalEvent[] | null>(null);
   const [ideasCount, setIdeasCount] = useState<number | null>(null);
+  const [newIdeas, setNewIdeas] = useState<number>(0);
+  const [displayName, setDisplayName] = useState<string | null>(null);
   const [wotd, setWotd] = useState<{ en: any; he: any } | null>(null);
   const [calError, setCalError] = useState(false);
 
@@ -36,6 +38,14 @@ export default function TodayPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setWotd(d && !d.error ? d : null))
       .catch(() => setWotd(null));
+    fetch("/api/ideas?status=new")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setNewIdeas(Array.isArray(d) ? d.length : 0))
+      .catch(() => setNewIdeas(0));
+    fetch("/api/profile")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setDisplayName(d?.display_name || d?.first_name || null))
+      .catch(() => setDisplayName(null));
   }, []);
 
   function plural(n: number, one: string, few: string, many: string) {
@@ -79,7 +89,7 @@ export default function TodayPage() {
       >
         <div className="eyebrow">{ruDate()}</div>
         <h1 className="mt-2 font-display text-4xl font-light leading-tight tracking-tight lg:text-5xl">
-          {greeting(session?.user?.name)}
+          {greeting(displayName || session?.user?.name)}
         </h1>
         {tasks !== null && (
           <p className="mt-3 text-sm font-light text-soft">
@@ -167,6 +177,21 @@ export default function TodayPage() {
           </Card>
         </div>
       </div>
+
+      {newIdeas > 0 && (
+        <div className="mt-4">
+          <Link href="/ideas">
+            <Card className="flex items-center gap-3 transition hover:shadow-lift">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-butter-soft text-butter"><Sparkles size={16} /></span>
+              <div className="flex-1">
+                <div className="font-display text-base font-semibold">Новые идеи</div>
+                <div className="text-sm text-soft">У вас {newIdeas} {newIdeas === 1 ? "новая идея" : newIdeas < 5 ? "новые идеи" : "новых идей"} для разбора</div>
+              </div>
+              <ArrowRight size={16} className="text-soft" />
+            </Card>
+          </Link>
+        </div>
+      )}
 
       {(wotd?.en || wotd?.he) ? (
         <div className="mt-4">

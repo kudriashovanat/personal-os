@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 
 // Универсальный CRUD для простых коллекций. Только белый список таблиц.
-const ALLOWED = new Set(["content_ideas", "career_items", "goals", "contacts"]);
+const ALLOWED = new Set(["content_ideas", "career_items", "goals", "contacts", "task_filters"]);
 
 function check(table: string) {
   if (!ALLOWED.has(table)) throw new Error("Таблица недоступна");
